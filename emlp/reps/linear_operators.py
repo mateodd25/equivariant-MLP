@@ -4,10 +4,11 @@ import numpy as np
 from jax import jit
 import jax
 from functools import reduce
+from emlp.utils import export
 
 product = lambda c: reduce(lambda a, b: a * b, c)
-
-
+# TODO: Remove this export decorator eventually.
+@export
 def lazify(x):
     if isinstance(x, LinearOperator):
         return x
@@ -181,8 +182,8 @@ class LazyDirectSum(LinearOperator):
             [1 for M in Ms] if multiplicities is None else multiplicities
         )
         shape = (
-            sum(Mi.shape[0] * c for Mi, c in zip(Ms, multiplicities)),
-            sum(Mi.shape[0] * c for Mi, c in zip(Ms, multiplicities)),
+            sum(Mi.shape[0] * c for Mi, c in zip(Ms, self.multiplicities)),
+            sum(Mi.shape[1] * c for Mi, c in zip(Ms, self.multiplicities)),
         )
         super().__init__(None, shape)
         # self.dtype=Ms[0].dtype
