@@ -152,7 +152,7 @@ class ConcatLazy(LinearOperator):
     def __init__(self, Ms):
         self.Ms = Ms
         assert all(
-            M.shape[0] == Ms[0].shape[0] for M in Ms
+            M.shape[1] == Ms[0].shape[1] for M in Ms
         ), f"Trying to concatenate matrices of different sizes {[M.shape for M in Ms]}"
         shape = (sum(M.shape[0] for M in Ms), Ms[0].shape[1])
         super().__init__(None, shape)
