@@ -56,7 +56,7 @@ class RegressorPlus(Regressor):
         """Standard cross-entropy loss"""
         x, y = minibatch
         mse = jnp.mean(
-            (self.model(x, training=True) - y) ** 2
+            (self.model(x, training=True).reshape(y.shape) - y) ** 2
         )  # jnp.mean(jnp.abs(self.model(x,training=True)-y))
         return mse
 

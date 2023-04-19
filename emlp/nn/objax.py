@@ -205,7 +205,7 @@ class ExtendableLinear(nn.Linear):
         self,
         repin,
         repout,
-        include_bias=False,
+        include_bias=True,
         bias_val=None,
         coeff_val=None,
         compatibility_constraints=None,
@@ -248,7 +248,7 @@ class ExtendableLinear(nn.Linear):
     def __call__(self, x):
         logging.debug(f"Linear in shape: {x.shape}")
         W = (self.basis @ self.w).reshape((self.size_out, self.size_in))
-        out = x @ W.T
+        out = (x @ W.T)
         if self.use_bias:
             out = out + (self.bias_basis @ self.b)
         logging.debug(f"Linear out shape: {out.shape}")
@@ -322,7 +322,7 @@ class ExtendableEMLP(Module, metaclass=Named):
             logging.info(f"Reps: {reps}")
             self.network = Sequential(
                 *[ExtendableEMLPBlock(rin, rout) for rin, rout in zip(reps, reps[1:])],
-                Linear(reps[-1], self.rep_out),
+                ExtendableLinear(reps[-1], self.rep_out),
             )
 
     def __call__(self, x, training=True):
