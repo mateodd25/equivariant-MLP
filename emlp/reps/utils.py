@@ -7,7 +7,7 @@ import numpy as np
 import tqdm
 import jax.numpy as jnp
 import optax
-
+from emlp.utils import export
 
 class ConvergenceError(Exception):
     """Iterative method did not converge."""
@@ -15,6 +15,7 @@ class ConvergenceError(Exception):
     pass
 
 
+@export
 def null_space(matrix: LinearOperator):
     """Return null space of a linear operator"""
     if matrix.shape[0] * matrix.shape[1] > 5e8:  # Too large to use SVD
