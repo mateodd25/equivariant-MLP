@@ -107,6 +107,20 @@ class GatedNonlinearity(Module):
         activations = jax.nn.relu(gate_scalars) * values[..., : self.rep.size()]
         return activations
 
+@export
+class ReluNonlinearity(Module):
+    """Gated nonlinearity. Requires input to have the additional gate scalars
+    for every non regular and non scalar rep. Applies swish to regular and
+    scalar reps."""
+
+    def __init__(self, rep):
+        super().__init__()
+        self.rep = rep
+
+    def __call__(self, values):
+        activations = jax.nn.relu(values)
+        return activations
+
 
 @export
 class EMLPBlock(Module):
@@ -206,12 +220,12 @@ class ExtendableLinear(nn.Linear):
         repin,
         repout,
         include_bias=True,
-        bias_val=None,
+            compatibility_constraints=None,
+            bias_val=None,
         coeff_val=None,
-        compatibility_constraints=None,
     ):
         self.size_in, self.size_out = repin.size(), repout.size()
-        super().__init__(self.size_in, self.size_out)
+        super().__init__(self.size_in, self.size_out, use_bias=include_bias)
         self.use_bias = include_bias
         if include_bias:
             self.bias_basis = repout.equivariant_basis()
@@ -221,9 +235,11 @@ class ExtendableLinear(nn.Linear):
                 self.b = TrainVar(bias_val)
             else:
                 self.b = TrainVar(
-                    objax.random.uniform((self.bias_size,)) / jnp.sqrt(self.bias_size)
+                    objax.random.uniform((self.bias_size,)) / jnp.sqrt(1000)
                 )
+            print("Use bias")
         else:
+            print("No bias")
             self.bias_basis = None
 
         # TODO: Fix this hack once EquivariantLinearMaps is implemented properly.
@@ -232,17 +248,18 @@ class ExtendableLinear(nn.Linear):
                 repin, repout, compatibility_constraints
             )  # TODO: Make class to handle this?
             self.basis = rep_W.equivariant_basis()
+            print("Compatible")
         else:
             self.rep_W = rep_W = repin >> repout
             self.basis = rep_W.equivariant_basis()
-
+            print("Not compatatible")
         basis_size = self.basis.shape[1]
 
         if coeff_val is not None:
             self.w = TrainVar(coeff_val)
         else:
             self.w = TrainVar(
-                objax.random.uniform((basis_size,)) / jnp.sqrt(basis_size)
+                objax.random.uniform((basis_size,)) / jnp.sqrt(1000)
             )
 
     def __call__(self, x):
@@ -261,14 +278,18 @@ class ExtendableLinear(nn.Linear):
 
 @export
 class ExtendableEMLPBlock(Module):
-    def __init__(self, rep_in, rep_out, compatibility_constraints=None):
+    def __init__(self, rep_in, rep_out, compatibility_constraints=None, use_bias=True):
         super().__init__()
         self.linear = ExtendableLinear(
-            rep_in, rep_out, compatibility_constraints=compatibility_constraints
+            rep_in,
+            rep_out,
+            include_bias=use_bias,
+            compatibility_constraints=compatibility_constraints,
         )
         # TODO: Implement Bilinear
         # self.bilinear = ExtendableBilinear(rep_out, rep_out)
-        self.nonlinearity = GatedNonlinearity(rep_out)
+        # self.nonlinearity = GatedNonlinearity(rep_out)
+        self.nonlinearity = ReluNonlinearity(rep_out)
 
     def __call__(self, x):
         lin = self.linear(x)
@@ -284,7 +305,7 @@ class ExtendableEMLP(Module, metaclass=Named):
     """
 
     def __init__(
-        self, sequence_in, sequence_out, hidden_sequences, k, is_compatible=True
+            self, sequence_in, sequence_out, hidden_sequences, k, is_compatible=False, use_bias=True
     ):
         self.rep_in = sequence_in.representation(k)
         self.rep_out = sequence_out.representation(k)
@@ -298,9 +319,10 @@ class ExtendableEMLP(Module, metaclass=Named):
                     ExtendableEMLPBlock(
                         sin.representation(k),
                         sout.representation(k),
-                        EquivariantOperatorSequence(
+                        compatibility_constraints=EquivariantOperatorSequence(
                             sin, sout
                         ).compatibility_constraints(k),
+                        use_bias=use_bias,
                     )
                 )
 
@@ -310,7 +332,8 @@ class ExtendableEMLP(Module, metaclass=Named):
                 ExtendableLinear(
                     sequences[-1].representation(k),
                     self.rep_out,
-                    EquivariantOperatorSequence(
+                    include_bias=use_bias,
+                    compatibility_constraints=EquivariantOperatorSequence(
                         sequences[-1], sequence_out
                     ).compatibility_constraints(k),
                 ),
@@ -337,23 +360,33 @@ class EMLPSequence(object):
     at a fixed level k.
     """
 
-    def __init__(self, sequence_in, sequence_out, hidden_sequences):
+    def __init__(
+            self,
+            sequence_in,
+            sequence_out,
+            hidden_sequences,
+            is_compatible=False
+    ):
         self.is_trained = False
         self.trained_level = -1  # Stores the level at which the EMLP was trained
         self.learned_emlp = None
         self.sequence_in = sequence_in
         self.sequence_out = sequence_out
         self.hidden_sequences = hidden_sequences
+        self.is_compatible=is_compatible
 
     # TODO: Store a cached version of already evaluated levels, so as to not repeat computations.
     def emlp_at_level(self, j, trained=False):
-        if self.is_trained == False and trained == True:
+        if self.is_trained is False and trained is True:
             raise ValueError(
                 "At least one level of the EMLP sequence has to be trained before it can return trained EMLPs at any level."
             )
         # TODO: Make it work once things are trained
         return ExtendableEMLP(
-            self.sequence_in, self.sequence_out, self.hidden_sequences, j  # Level
+            self.sequence_in, self.sequence_out, self.hidden_sequences,
+            j,  # Level
+            is_compatible=self.is_compatible,
+            use_bias=(not self.is_compatible)
         )
 
     def set_trained_emlp_at_level(self, k, emlp: ExtendableEMLP):

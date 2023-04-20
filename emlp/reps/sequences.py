@@ -196,6 +196,10 @@ class EquivariantOperatorSequence(object):
     def compatibility_constraints(self, j):
         """Constraints that ensure that the basis at level j is extendable."""
         constraints = []
+        pre_dgr = self.input_representation.presentation_degree
+        if j <= pre_dgr:
+            raise ValueError(f"Can only extend when the level {j} is greater than the presentation degree {pre_dgr}")
+
         constraints.extend(
             [
                 LazyKron(

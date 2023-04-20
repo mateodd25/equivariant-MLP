@@ -107,9 +107,9 @@ for epoch in tqdm(range(NUM_EPOCHS)):
         v, g = train_op(jnp.array(x),jnp.array(y),lr)
         losses.append(v)
         gradients.append(g)
-        # gradient_norms.append(np.linalg.norm(g))
+        gradient_norms.append(np.linalg.norm(g))
     train_losses.append(np.mean(losses))
-    # gra_n.append(np.mean(gradient_norms))
+    gra_n.append(np.mean(gradient_norms))
     if not epoch%10:
         test_losses.append(np.mean([loss(jnp.array(x),jnp.array(y)) for (x,y) in testloader]))
 
