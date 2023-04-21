@@ -38,14 +38,11 @@ class ConsistentSequence(object):
         raise NotImplementedError
 
     def composite_embedding(self, n, i):
-        """Composite embedding from level n to j.
+        """Composite embedding from level n to i.
 
-        That is, embedding(n-1) @ ... @ embedding(j).
+        That is, embedding(n-1) @ ... @ embedding(i).
         """
-        # if self.presentation_degree < j:
-        #     raise ValueError(
-        #         f"Second input {j} has to be less than or equal to the presentation degree {self.presentation_degree}."
-        #     )
+
         if n <= i:
             raise ValueError(
                 f"First input {n} has to be greather than the second input {i}."
@@ -54,6 +51,14 @@ class ConsistentSequence(object):
             return self.up_embedding(i)
         else:  # n > j + 1
             return self.up_embedding(n - 1) @ self.composite_embedding(n - 1, i)
+
+    def extendibility_constraints(self, n, n0):
+        """Gives constraints that extend an element at level n0 to level n."""
+
+        constraints = []
+        constraints.extend(self.representation(n).constraint_matrix())
+        constraints.extend(self.composite_embedding(n, n0))
+        return ConcatLazy(constraints)
 
     def __add__(self, other):
         """Direct sum of two representations"""
@@ -188,7 +193,9 @@ class EquivariantOperatorSequence(object):
             self.output_representation = input_representation
         else:
             self.output_representation = output_representation
-        # self.presentation_degree = max(
+
+            
+            # self.presentation_degree = max(
         #     self.input_representation.presentation_degree,
         #     self.output_representation.presentation_degree,
         # )
@@ -232,6 +239,13 @@ class EquivariantOperatorSequence(object):
 
     def equivariant_basis(self, j):
         return self.at_level(j).equivariant_basis()
+
+    def extendability_constratints(self, n, n0):
+        constraints = []
+        constraints.expend(
+            (self.input_representation.representation(n) >> self.output_representation.representation(n)).constraint_matrix())
+        constraints.expand([LazyKron([self.input_representation.composite_embedding(n, n0).H, self.output_representationk.composite_embedding(n,n0).H])])
+        return ConcatLazy(constraints)
 
     def at_level(self, j):
         return  EquivariantOperators(self.input_representation.representation(j),

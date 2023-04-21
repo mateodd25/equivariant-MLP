@@ -27,8 +27,8 @@ SS = PermutationSequence()
 TT = TrivialSequence(SS.group_sequence())
 V2 = SS * SS
 # inner = V2 + V2 + V2 + V2 + V2
-# inner = V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS  # Two inner layers of this are good for l1 trace
-inner = V2 + V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS + SS + SS
+inner = V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS  # Two inner layers of this are good for l1 trace
+# inner = V2 + V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS + SS + SS
 NN = EMLPSequence(V2, TT, 2  * [inner], is_compatible=True)  # Rep in  # Rep out  # Hidden layers
 d = 5
 model = NN.emlp_at_level(d)
