@@ -237,14 +237,20 @@ class EquivariantOperatorSequence(object):
         # )
         return ConcatLazy(constraints)
 
-    def equivariant_basis(self, j):
-        return self.at_level(j).equivariant_basis()
+    def equivariant_basis(self, level):
+        return self.at_level(level).equivariant_basis()
 
-    def extendability_constratints(self, n, n0):
+    def composite_embedding(self, up_level, low_level):
+        return LazyKron([
+            self.input_representation.composite_embedding(up_level, low_level),
+            self.output_representation.composite_embedding(up_level, low_level) 
+        ])
+        
+    def extendability_constraints(self, n, n0):
         constraints = []
-        constraints.expend(
+        constraints.append(
             (self.input_representation.representation(n) >> self.output_representation.representation(n)).constraint_matrix())
-        constraints.expand([LazyKron([self.input_representation.composite_embedding(n, n0).H, self.output_representationk.composite_embedding(n,n0).H])])
+        constraints.append(LazyKron([self.input_representation.composite_embedding(n, n0).H, self.output_representation.composite_embedding(n,n0).H]))
         return ConcatLazy(constraints)
 
     def at_level(self, j):

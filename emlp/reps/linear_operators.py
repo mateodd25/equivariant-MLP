@@ -322,15 +322,18 @@ class SlicedI(LinearOperator):
                 [V, jnp.zeros((self.n - self.k, V.shape[1]))], axis=0
             )
         else:
-            return V[0 : self.n, :]
+            return V[0:self.n, :]
 
     def _matvec(self, V):
         if self.n == self.k:
             return V
         elif self.n > self.k:
             res = np.zeros((self.n, 1))
-            res[0 : (self.k)] = V
-            return jnp.array(res)
+            if self.k == 1:
+                res[0] = V[0]
+            else:
+                res[0:(self.k)] = V
+            return res
         else:
             return V[0 : self.n]
 
