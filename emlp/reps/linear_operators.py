@@ -162,8 +162,17 @@ class ConcatLazy(LinearOperator):
         return jnp.concatenate([M @ V for M in self.Ms], axis=0)
 
     def _rmatmat(self, V):
-        Vs = jnp.split(V, len(self.Ms))
-        return sum([self.Ms[i].T @ Vs[i] for i in range(len(self.Ms))])
+        indices = []
+        sum = 0
+        for M in self.Ms:
+            sum += M.shape[0]
+            indices.append(sum)
+            
+        Vs = jnp.split(V, indices)
+        return reduce(np.add, [self.Ms[i].T @ Vs[i] for i in range(len(self.Ms))])
+
+    def _rmatvec(self, v):
+        return self._rmatmat(v).reshape(-1)
 
     def to_dense(self):
         dense_Ms = [

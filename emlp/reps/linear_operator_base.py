@@ -195,7 +195,7 @@ class LinearOperator(object):
 
         M, N = self.shape
         if x.shape != (N,) and x.shape != (N, 1):
-            raise ValueError("dimension mismatch")
+            raise ValueError(f"Dimension mismatch x.shape = {x.shape} and self.shape = {self.shape}")
 
         y = self._matvec(x)
 

@@ -41,6 +41,9 @@ class SumRep(Rep):
         self.invperm = np.argsort(self.perm)
         self.canonical = (self.perm == np.arange(len(self.perm))).all()
         self.is_permutation = all(rep.is_permutation for rep in self.reps.keys())
+        Gs = tuple(set(rep.G for rep in self.reps.keys()))
+        self.G = Gs[0]
+
 
     def size(self):
         return sum(rep.size() * count for rep, count in self.reps.items())
