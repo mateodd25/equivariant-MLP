@@ -52,12 +52,12 @@ class ConsistentSequence(object):
         else:  # n > j + 1
             return self.up_embedding(n - 1) @ self.composite_embedding(n - 1, i)
 
-    def extendibility_constraints(self, n, n0):
+    def extendability_constraints(self, n, n0):
         """Gives constraints that extend an element at level n0 to level n."""
 
         constraints = []
-        constraints.extend(self.representation(n).constraint_matrix())
-        constraints.extend(self.composite_embedding(n, n0))
+        constraints.append(self.representation(n).constraint_matrix())
+        constraints.append(self.composite_embedding(n, n0).H)
         return ConcatLazy(constraints)
 
     def __add__(self, other):
@@ -109,9 +109,9 @@ class SumSequence(ConsistentSequence):
 
     def representation(self, j):
         """Direct sum representation"""
-        return self.first_sequence.representation(
-            j
-        ) + self.second_sequence.representation(j)
+        rep =  self.first_sequence.representation(j) + self.second_sequence.representation(j)
+        rep.G = self.group_sequence().group(j)
+        return rep
 
     def up_embedding(self, j):
         """Direct sum of the embeddings"""
@@ -146,7 +146,8 @@ class ProductSequence(ConsistentSequence):
     def up_embedding(self, j):
         r"""Kroneker product of the embeddings"""
         return LazyKron(
-            [self.first_sequence.up_embedding(j), self.second_sequence.up_embedding(j)]
+            # [self.first_sequence.up_embedding(j), self.second_sequence.up_embedding(j)]
+            [self.second_sequence.up_embedding(j), self.first_sequence.up_embedding(j)]
         )
 
 
@@ -209,14 +210,15 @@ class EquivariantOperatorSequence(object):
 
         constraints.extend(
             [
+                # Their kronecker version is backwards why?! 
                 LazyKron(
                     [
-                        self.input_representation.composite_embedding(j, k).H,
                         (
                             I(self.output_representation.dimension(j))
                             - self.output_representation.composite_embedding(j, k)
                             @ self.output_representation.composite_embedding(j, k).H
                         ),
+                        self.input_representation.composite_embedding(j, k).H,
                     ]
                 )
                 for k in range(1, self.input_representation.generation_degree + 1)
@@ -242,15 +244,15 @@ class EquivariantOperatorSequence(object):
 
     def composite_embedding(self, up_level, low_level):
         return LazyKron([
+            self.output_representation.composite_embedding(up_level, low_level), 
             self.input_representation.composite_embedding(up_level, low_level),
-            self.output_representation.composite_embedding(up_level, low_level) 
         ])
         
     def extendability_constraints(self, n, n0):
         constraints = []
         constraints.append(
             (self.input_representation.representation(n) >> self.output_representation.representation(n)).constraint_matrix())
-        constraints.append(LazyKron([self.input_representation.composite_embedding(n, n0).H, self.output_representation.composite_embedding(n,n0).H]))
+        constraints.append(LazyKron([self.output_representation.composite_embedding(n, n0).H, self.input_representation.composite_embedding(n,n0).H]))
         return ConcatLazy(constraints)
 
     def at_level(self, j):

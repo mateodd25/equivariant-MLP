@@ -22,6 +22,7 @@ from scipy.special import binom
 from jax import jit, vmap
 from functools import lru_cache as cache
 from objax.util import class_name
+from jaxopt import linear_solve
 
 
 def Sequential(*args):
@@ -476,20 +477,19 @@ class EMLPSequence(object):
             right_hand_side = np.zeros(constraints.shape[0])
             # TODO: Make sure that the sizes here are right
             right_hand_side[(-len(w)):] = w
-            import pdb; pdb.set_trace()
-            print(right_hand_side.shape)
-            print(constraints.shape)
-            print(np.linalg.solve(constraints.to_dense(), right_hand_side.reshape((len(right_hand_side), 1))))
-            w_at_new_level, _ = jax.scipy.sparse.linalg.gmres(constraints, right_hand_side)
+            # w_at_new_level, _, _, _ = np.linalg.solve(constraints.to_dense(), right_hand_side.reshape((len(right_hand_side), 1)))
+            map = (lambda x: constraints @ x)
+            w_at_new_level = linear_solve.solve_normal_cg(map, right_hand_side, init=np.ones(constraints.shape[1]))
 
             if self.use_bias:
-                constraints_b = seq_in.representation(level).extendability_constraints(
+                constraints_b = seq_out.extendability_constraints(
                     level, self.trained_level
                 )
                 right_hand_side_b = np.zeros(constraints_b.shape[0])
-                right_hand_side_b[-len(b):] = b
-                b_at_new_level, _ = jax.scipy.sparse.linalg.gmres(
-                    constraints_b, right_hand_side_b
+                right_hand_side_b[(-len(b)):] = b
+                map_b = (lambda x: constraints_b @ x)
+                b_at_new_level = linear_solve.solve_normal_cg(
+                    constraints_b, right_hand_side_b, init=np.ones(constraints_b.shape[1])
                 )
         return (
             w_at_new_level.reshape(seq_out.dimension(level), seq_in.dimension(level)),

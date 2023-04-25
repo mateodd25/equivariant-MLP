@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 from tqdm.auto import tqdm
 from torch.utils.data import DataLoader
+from time import time
 
 from emlp.reps import (
     PermutationSequence,
@@ -19,27 +20,45 @@ import numpy as np
 from emlp.groups import S
 from objax.functional.loss import mean_squared_error
 
+def to_evaluate(x):
+    return np.trace(np.matrix(x))
+
+
+def test_different_dimensions(NN, upper_bound):
+    models = []
+    times = []
+    mses = []
+    for i in range(2, upper_bound):
+        ext_test_data = []
+        for j in range(100):
+            x = np.random.randn(i, i)
+            ext_test_data.append((x, to_evaluate(x)))
+        
+        t1 = time()
+        models.append(NN.emlp_at_level(i, trained=True))
+        times.append(time() - t1)
+        mses.append(np.mean([(models[-1](x.reshape(-1)) - y) ** 2 for x, y in ext_test_data]))
+        print(f"Level {i} time to extend {times[-1]} with MSE {mses[-1]}")
+    return models, times, mses
+
 if __name__ == "__main__":
     BS = 500
     lr = 1e-2
-    NUM_EPOCHS = 100
+    NUM_EPOCHS = 600
 
 
     SS = PermutationSequence()
     TT = TrivialSequence(SS.group_sequence())
     V2 = SS * SS
-    # inner = V2 + V2 + V2 + V2 + V2
+    inner = V2 + V2 + V2 + V2 + SS + SS + SS
+    # inner = V2 + V2 + V2 + V2 + V2+ SS + SS + SS + SS
     # inner = (
         # V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS
     # )  # Two inner layers of this are good for l1 trace
     # inner = V2 + V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS + SS + SS
-    NN = EMLPSequence(
-        V2, TT, [], is_compatible=True
-    )  # Rep in  # Rep out  # Hidden layers
-    d = 5
-    model = NN.emlp_at_level(d)
-
-
+    
+    upper_bound = 31
+    d = 8
     train_dataset = []
     test_dataset = []
     N = 2000
@@ -48,7 +67,7 @@ if __name__ == "__main__":
         # y = sum(x)
         # y = np.sum(np.sqrt(np.abs(x)))
         # y = np.sum(np.abs(x))
-        y = np.trace(np.matrix(x))
+        y = to_evaluate(x)
         # y = (np.trace(np.matrix(np.abs(x))))
         # y = (np.sum(np.sqrt(np.diag(np.matrix(np.abs(x))))))
         train_dataset.append((x.reshape((d**2,)), y))
@@ -58,70 +77,119 @@ if __name__ == "__main__":
         # y = sum(x)
         # y = np.sum(np.abs(x))
         # y = np.sum(np.sqrt(np.abs(x)))
-        y = np.trace(np.matrix(x))
+        y = to_evaluate(x)
         # y = (np.trace(np.matrix(np.abs(x))))
         # y = (np.sum(np.sqrt(np.diag(np.matrix(np.abs(x))))))
         # y = np.sum(np.abs(x))
         test_dataset.append((x.reshape((d**2,)), y))
 
 
-    opt = objax.optimizer.Adam(model.vars())
+
+    def train_model(compatible):
+        NN = EMLPSequence(
+            V2, TT,  2 * [inner], is_compatible=compatible
+        )  # Rep in  # Rep out  # Hidden layers
+        model = NN.emlp_at_level(d)
+
+        opt = objax.optimizer.Adam(model.vars())
+        @objax.Jit
+        @objax.Function.with_vars(model.vars())
+        def loss(x, y):
+            yhat = model(x)
+            return mean_squared_error(yhat.reshape(y.shape), y, 0)
 
 
-    @objax.Jit
-    @objax.Function.with_vars(model.vars())
-    def loss(x, y):
-        yhat = model(x)
-        return mean_squared_error(yhat.reshape(y.shape), y, 0)
+        grad_and_val = objax.GradValues(loss, model.vars())
 
 
-    grad_and_val = objax.GradValues(loss, model.vars())
+        @objax.Jit
+        @objax.Function.with_vars(model.vars() + opt.vars())
+        def train_op(x, y, lr):
+            g, v = grad_and_val(x, y)
+            opt(lr=lr, grads=g)
+            return v, g
 
 
-    @objax.Jit
-    @objax.Function.with_vars(model.vars() + opt.vars())
-    def train_op(x, y, lr):
-        g, v = grad_and_val(x, y)
-        opt(lr=lr, grads=g)
-        return v, g
+        trainloader = DataLoader(train_dataset, batch_size=BS, shuffle=True)
+        testloader = DataLoader(test_dataset, batch_size=BS, shuffle=True)
+        print("Generated the data")
 
 
-    trainloader = DataLoader(train_dataset, batch_size=BS, shuffle=True)
-    testloader = DataLoader(test_dataset, batch_size=BS, shuffle=True)
-    print("Generated the data")
+        test_losses = []
+        train_losses = []
+        gradients = []
+        gra_n = []
+        for epoch in tqdm(range(NUM_EPOCHS)):
+            losses = []
+            gradient_norms = []
+            for x, y in trainloader:
+                v, g = train_op(jnp.array(x), jnp.array(y), lr)
+                losses.append(v)
+                gradients.append(g)
+                # print(g))
+            train_losses.append(np.mean(losses))
+            gra_n.append(np.mean(gradient_norms))
+            if not epoch % 10:
+                test_losses.append(
+                    np.mean([loss(jnp.array(x), jnp.array(y)) for (x, y) in testloader])
+                )
+                print(
+                    f"Epoch {epoch} Train loss {train_losses[-1]} Test loss {train_losses[-1]} Grad norm {gra_n[-1]}"
+                )
+        
+        NN.set_trained_emlp_at_level(model)
+        return model, NN, train_losses, test_losses 
+
+    
+        
+    model_comp, NN_comp, train_losses_comp, test_losses_comp = train_model(True)
+    models_comp, times_comp, mses_comp = test_different_dimensions(NN_comp, upper_bound)
 
 
-    test_losses = []
-    train_losses = []
-    gradients = []
-    gra_n = []
-    for epoch in tqdm(range(NUM_EPOCHS)):
-        losses = []
-        gradient_norms = []
-        for x, y in trainloader:
-            v, g = train_op(jnp.array(x), jnp.array(y), lr)
-            losses.append(v)
-            gradients.append(g)
-            # print(g))
-        train_losses.append(np.mean(losses))
-        gra_n.append(np.mean(gradient_norms))
-        if not epoch % 10:
-            test_losses.append(
-                np.mean([loss(jnp.array(x), jnp.array(y)) for (x, y) in testloader])
-            )
-            print(
-                f"Epoch {epoch} Train loss {train_losses[-1]} Test loss {train_losses[-1]} Grad norm {gra_n[-1]}"
-            )
-
+    model_free, NN_free, train_losses_free, test_losses_free = train_model(False)
+    models_free, times_free, mses_free = test_different_dimensions(NN_free, upper_bound)
 
     import matplotlib.pyplot as plt
-
-    plt.plot(np.arange(NUM_EPOCHS), train_losses, label="Train loss")
-    plt.plot(np.arange(0, NUM_EPOCHS, 10), test_losses, label="Test loss")
-    plt.legend()
+    plt.plot(np.arange(2,upper_bound), mses_free, label="Free NN")
+    plt.plot(np.arange(2,upper_bound), mses_comp, label="Compatible NN")
     plt.yscale("log")
-    plt.savefig("result.pdf")
+    plt.legend()
+    plt.savefig("Interdimensional.pdf")
+    # import matplotlib.pyplot as plt
 
-    NN.set_trained_emlp_at_level(model)
-    model2 = NN.emlp_at_level(2, trained=True) 
-    model6 = NN.emlp_at_level(6, trained=True)
+    # plt.plot(np.arange(NUM_EPOCHS), train_losses_comp, label="Train loss")
+    # plt.plot(np.arange(0, NUM_EPOCHS, 10), test_losses_comp, label="Test loss")
+    # plt.legend()
+    # plt.yscale("log")
+    # plt.savefig("result.pdf")
+
+    # )
+        
+    
+    # model2 = models[0]
+    # model6 = models[4]
+
+    # small_e = np.eye(2)
+    # e = np.eye(5); e[2, 2] = 0; e[3, 3] = 0; e[4, 4] = 0
+
+    # print(f"Error small identity {np.abs(model(e.reshape(-1)) - model2(small_e.reshape(-1)))}")
+
+    # e = np.eye(5)
+    # big_e = np.eye(6)
+    # big_e[5, 5] = 0
+    # print(f"Error big identity {np.abs(model(e.reshape(-1)) - model6(big_e.reshape(-1)))}")
+
+    # small_e = np.outer( np.ones(2), np.ones(2))
+    # v = np.zeros(5)
+    # v[:2] = np.ones(2)
+    # e = np.outer(v,v)
+    # print(f"Error small ones {np.abs(model(e.reshape(-1)) - model2(small_e.reshape(-1)))}")
+
+    # e = np.outer(np.ones(5), np.ones(5))
+    # v = np.ones(6)
+    # v[-1] = 0
+    # big_e = np.outer(v,v)
+    # print(f"Error big ones {np.abs(model(e.reshape(-1)) - model6(big_e.reshape(-1)))}")
+
+    # maps = EquivariantOperatorSequence(V2, inner) 
+    
