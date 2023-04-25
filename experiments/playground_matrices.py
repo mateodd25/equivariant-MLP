@@ -6,6 +6,7 @@ import numpy as np
 from tqdm.auto import tqdm
 from torch.utils.data import DataLoader
 from time import time
+import gc
 
 from emlp.reps import (
     PermutationSequence,
@@ -21,30 +22,35 @@ from emlp.groups import S
 from objax.functional.loss import mean_squared_error
 
 def to_evaluate(x):
+    # y = sum(x)
+    # y = np.sum(np.sqrt(np.abs(x)))
+    # y = np.sum(np.abs(x))
+    # y = (np.trace(np.matrix(np.abs(x))))
+    # y = (np.sum(np.sqrt(np.diag(np.matrix(np.abs(x))))))
     return np.trace(np.matrix(x))
 
 
-def test_different_dimensions(NN, upper_bound):
-    models = []
+def test_different_dimensions(NN, dimensions_to_extend, test_data):
+    # models = []
     times = []
     mses = []
-    for i in range(2, upper_bound):
-        ext_test_data = []
-        for j in range(100):
-            x = np.random.randn(i, i)
-            ext_test_data.append((x, to_evaluate(x)))
-        
+    j = 0
+    for i in dimensions_to_extend:
+        ext_test_data = test_data[j]
+        j += 1        
         t1 = time()
-        models.append(NN.emlp_at_level(i, trained=True))
+        model = NN.emlp_at_level(i, trained=True)
         times.append(time() - t1)
-        mses.append(np.mean([(models[-1](x.reshape(-1)) - y) ** 2 for x, y in ext_test_data]))
+        mses.append(np.mean([(model(x.reshape(-1)) - y) ** 2 for x, y in ext_test_data]))
         print(f"Level {i} time to extend {times[-1]} with MSE {mses[-1]}")
-    return models, times, mses
+        del model
+        gc.collect()
+    return times, mses
 
 if __name__ == "__main__":
     BS = 500
     lr = 1e-2
-    NUM_EPOCHS = 600
+    NUM_EPOCHS = 1000
 
 
     SS = PermutationSequence()
@@ -56,31 +62,28 @@ if __name__ == "__main__":
         # V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS
     # )  # Two inner layers of this are good for l1 trace
     # inner = V2 + V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS + SS + SS
-    
-    upper_bound = 31
+
+    dimensions_to_extend = [20, 30, 40]
+    interdimensional_test = []
+    for i in dimensions_to_extend:
+        ext_test_data = []
+        for _ in range(100):
+            x = np.random.randn(i, i)
+            ext_test_data.append((x, to_evaluate(x)))
+        interdimensional_test.append(ext_test_data)
+
     d = 8
     train_dataset = []
     test_dataset = []
     N = 2000
     for j in range(N):
         x = np.random.randn(d, d)
-        # y = sum(x)
-        # y = np.sum(np.sqrt(np.abs(x)))
-        # y = np.sum(np.abs(x))
         y = to_evaluate(x)
-        # y = (np.trace(np.matrix(np.abs(x))))
-        # y = (np.sum(np.sqrt(np.diag(np.matrix(np.abs(x))))))
         train_dataset.append((x.reshape((d**2,)), y))
 
     for j in range(N):
         x = np.random.randn(d, d)
-        # y = sum(x)
-        # y = np.sum(np.abs(x))
-        # y = np.sum(np.sqrt(np.abs(x)))
         y = to_evaluate(x)
-        # y = (np.trace(np.matrix(np.abs(x))))
-        # y = (np.sum(np.sqrt(np.diag(np.matrix(np.abs(x))))))
-        # y = np.sum(np.abs(x))
         test_dataset.append((x.reshape((d**2,)), y))
 
 
@@ -143,15 +146,15 @@ if __name__ == "__main__":
     
         
     model_comp, NN_comp, train_losses_comp, test_losses_comp = train_model(True)
-    models_comp, times_comp, mses_comp = test_different_dimensions(NN_comp, upper_bound)
+    times_comp, mses_comp = test_different_dimensions(NN_comp, dimensions_to_extend, interdimensional_test)
 
 
     model_free, NN_free, train_losses_free, test_losses_free = train_model(False)
-    models_free, times_free, mses_free = test_different_dimensions(NN_free, upper_bound)
+    times_free, mses_free = test_different_dimensions(NN_free, dimensions_to_extend, interdimensional_test)
 
     import matplotlib.pyplot as plt
-    plt.plot(np.arange(2,upper_bound), mses_free, label="Free NN")
-    plt.plot(np.arange(2,upper_bound), mses_comp, label="Compatible NN")
+    plt.plot(dimensions_to_extend, mses_free, label="Free NN")
+    plt.plot(dimensions_to_extend, mses_comp, label="Compatible NN")
     plt.yscale("log")
     plt.legend()
     plt.savefig("Interdimensional.pdf")
