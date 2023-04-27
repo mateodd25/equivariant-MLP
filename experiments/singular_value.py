@@ -11,6 +11,7 @@ import pickle
 from scipy.sparse.linalg import svds
 from emlp.reps import (
     PermutationSequence,
+    OrthogonalSequence,
     TrivialSequence,
     EquivariantOperatorSequence,
     null_space,
@@ -26,12 +27,15 @@ import scienceplots
 
 
 def random_sample(size):
-    return 10 * np.random.rand(size, size)
+    return np.random.rand(size, size)
 
 def to_evaluate(x):
     _, _, vh = svds(x, k=1)
     return vh.reshape(-1)
 
+def _normalize_columns(x):
+    xnorms = jnp.sqrt(jnp.sum(x*x, 0))
+    return x * (1/xnorms)
 
 def test_different_dimensions(NN, dimensions_to_extend, test_data):
     # models = []
@@ -57,11 +61,12 @@ if __name__ == "__main__":
     NUM_EPOCHS = 1000
 
 
-    SS = PermutationSequence()
-    TT = TrivialSequence(SS.group_sequence())
-    V2 = SS * SS
-    # inner = V2 + V2 + V2 + V2 + V2  
-    inner = V2 * SS
+    OO = OrthogonalSequence()
+    TT = TrivialSequence(OO.group_sequence())
+    V2 = OO * OO
+    inner = V2 + V2 + V2 + V2 + V2 + V2 + V2 
+    num_inner_layers = 2
+    # inner = V2 * SS
     # inner = (
         # V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS
     # )  # Two inner layers of this are good for l1 trace
@@ -76,10 +81,10 @@ if __name__ == "__main__":
             ext_test_data.append((x, to_evaluate(x)))
         interdimensional_test.append(ext_test_data)
 
-    d = 8
+    d = 6
     train_dataset = []
     test_dataset = []
-    N = 10000
+    N = 2000
     for j in range(N):
         x = random_sample(d)
         y = to_evaluate(x)
@@ -94,7 +99,7 @@ if __name__ == "__main__":
 
     def train_model(compatible):
         NN = EMLPSequence(
-            V2, SS,  2 * [inner], is_compatible=compatible
+            V2, OO,  num_inner_layers * [inner], is_compatible=compatible
         )  # Rep in  # Rep out  # Hidden layers
         model = NN.emlp_at_level(d)
 
@@ -103,8 +108,8 @@ if __name__ == "__main__":
         @objax.Function.with_vars(model.vars())
         def loss(x, y):
             yhat = model(x)
-            return mean_squared_error(yhat.reshape(y.shape), y, 0)
-
+            yhat = (yhat.reshape(y.shape))
+            return jnp.mean(1 - jnp.sum(_normalize_columns(yhat) * _normalize_columns(y)) ** 2)
 
         grad_and_val = objax.GradValues(loss, model.vars())
 
@@ -147,25 +152,24 @@ if __name__ == "__main__":
         NN.set_trained_emlp_at_level(model)
         return model, NN, train_losses, test_losses 
 
-    
+    model_free, NN_free, train_losses_free, test_losses_free = train_model(False)
+    times_free, mses_free = test_different_dimensions(NN_free, dimensions_to_extend, interdimensional_test)
+
         
     model_comp, NN_comp, train_losses_comp, test_losses_comp = train_model(True)
     times_comp, mses_comp = test_different_dimensions(NN_comp, dimensions_to_extend, interdimensional_test)
 
 
-    model_free, NN_free, train_losses_free, test_losses_free = train_model(False)
-    times_free, mses_free = test_different_dimensions(NN_free, dimensions_to_extend, interdimensional_test)
-
-    plt.style.context(["science", "vibrant"])
-    fig, ax = plt.subplots()
-    ax.plot(dimensions_to_extend, mses_free, label="Free NN", linestyle="dashed")
-    ax.plot(dimensions_to_extend, mses_comp, label="Compatible NN")
-    plt.yscale("log")
-    ppar = dict(xlabel=r"Dimension $d$", ylabel=r"Mean squared error")
-    ax.legend()
-    ax.set(**ppar)
-    plt.savefig("Interdimensional.pdf")
+    # plt.style.context(["science", "vibrant"])
+    # fig, ax = plt.subplots()
+    # ax.plot(dimensions_to_extend, mses_free, label="Free NN", linestyle="dashed")
+    # ax.plot(dimensions_to_extend, mses_comp, label="Compatible NN")
+    # plt.yscale("log")
+    # ppar = dict(xlabel=r"Dimension $d$", ylabel=r"Mean squared error")
+    # ax.legend()
+    # ax.set(**ppar)
+    # plt.savefig("Interdimensional.pdf")
 
 
-    state = dict(times_comp=times_comp, times_free=times_free, mses_comp=mses_comp, mses_free=mses_free)
-    pickle.dump(state, open("state.p", "wb"))
+    # state = dict(times_comp=times_comp, times_free=times_free, mses_comp=mses_comp, mses_free=mses_free)
+    # pickle.dump(state, open("state.p", "wb"))

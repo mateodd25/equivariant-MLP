@@ -35,6 +35,9 @@ Several algorithms in the ``scipy.sparse`` library are able to operate on
 import warnings
 
 import jax.numpy as np
+from math import floor
+from scipy.sparse import coo_matrix, hstack
+from tqdm.auto import tqdm
 
 __all__ = ["LinearOperator", "aslinearoperator"]
 
@@ -427,6 +430,25 @@ class LinearOperator(object):
         matrix corresponding to the given lazy matrix. Defaults to
         multiplying by the identity"""
         return self @ np.eye(self.shape[-1])
+
+
+    def to_sparse(self):
+        """
+        Returns a sparse csr_matrix.
+        """
+        n = self.shape[-1]
+        batch_size = round(min(n/100, 100))
+        repetitions = floor(n/batch_size)
+        reminder = n - repetitions*batch_size
+        to_stack = []
+        for j in tqdm(range(repetitions)):
+            to_stack.append(coo_matrix(self @ np.eye(n, batch_size, -j*batch_size)))
+        if reminder > 0:
+            to_stack.append(coo_matrix(self @ np.eye(n, reminder, -repetitions*batch_size)))
+        return hstack(to_stack)
+        
+            
+        
 
 
 class _CustomLinearOperator(LinearOperator):

@@ -4,7 +4,7 @@
 import numpy as np
 from emlp.utils import export
 from plum import dispatch
-from ..group_sequences import PermutationGroupSequence
+from ..group_sequences import PermutationGroupSequence, OrthogonalGroupSequence
 from .linear_operators import I, LazyDirectSum, LazyKron, SlicedI, lazify, ConcatLazy
 from .representation import ScalarRep, V
 from .utils import null_space
@@ -205,8 +205,8 @@ class EquivariantOperatorSequence(object):
         """Constraints that ensure that the basis at level j is extendable."""
         constraints = []
         pre_dgr = self.input_representation.presentation_degree
-        if j <= pre_dgr:
-            raise ValueError(f"Can only extend when the level {j} is greater than the presentation degree {pre_dgr}")
+        if j < pre_dgr:
+            raise ValueError(f"Can only extend when the level {j} is equal or larger than the presentation degree {pre_dgr}")
 
         constraints.extend(
             [
@@ -221,7 +221,7 @@ class EquivariantOperatorSequence(object):
                         self.input_representation.composite_embedding(j, k).H,
                     ]
                 )
-                for k in range(1, self.input_representation.generation_degree + 1)
+                for k in range(1, min(self.input_representation.presentation_degree, j - 1) + 1)
             ]
         )
         # constraints.extend(
@@ -334,14 +334,23 @@ class PermutationSequence(ConsistentSequence):
         """Pad with one zero."""
         return SlicedI(j + 1, j)
 
-
 @export
-class SymmetricMatricesSequence(ConsistentSequence):
+class OrthogonalSequence(ConsistentSequence):
+    """Orthogonal group representation sequence."""
 
     def __init__(self):
-        self.generation_degree = 2
-        self.presentation_degree = 2
-        self._group_sequence = PermutationGroupSequence()
+        """Initialize the sequence."""
+        self.presentation_degree = 1  # It is unclear whether this is the case, but it seems to be true.
+        self.generation_degree = 1 
+        self._group_sequence = OrthogonalGroupSequence()
+
+    # def group(self, j):
+    # return self.group_sequence().group(j)
 
     def group_sequence(self):
+        """Return the permutation group in j elements."""
         return self._group_sequence
+
+    def up_embedding(self, j):
+        """Pad with one zero."""
+        return SlicedI(j + 1, j)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from emlp.utils import export
-from .groups import S
+from .groups import S, O
 
 
 class GroupSequence(object):
@@ -23,3 +23,17 @@ class PermutationGroupSequence(GroupSequence):
     def group(self, j):
         """Return the group at level j."""
         return S(j)
+
+
+@export
+class OrthogonalGroupSequence(GroupSequence):
+    """
+    Sequence of orthogonal groups O(n).
+    """
+
+    def __init__(self):
+        """Initialize laxy sequnece."""
+        self.name = "orthogonal"
+
+    def group(self, j):
+        return O(j)

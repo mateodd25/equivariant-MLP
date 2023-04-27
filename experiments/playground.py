@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-BS = 20
+BS = 200
 lr = 5e-3
-NUM_EPOCHS = 2000
+NUM_EPOCHS = 500
 
 import objax
 import jax.numpy as jnp
@@ -31,17 +31,17 @@ S5 = S1 + S1
 k = 2
 NN = EMLPSequence(SS, TT, k * [S5])  # Rep in  # Rep out  # Hidden layers
 d = 5
-# model = NN.emlp_at_level(d)
+model = NN.emlp_at_level(d)
 
-model = emlp.nn.EMLP(
-    SS.representation(d),
-    TT.representation(d),
-    group=S(d),
-    num_layers=k,
-    ch=2 * (V**2),
-)
+# model = emlp.nn.EMLP(
+#     SS.representation(d),
+#     TT.representation(d),
+#     group=S(d),
+#     num_layers=k,
+#     ch=2 * (V**2),
+# )
 # model = objax.nn.Linear(d, 1, use_bias=True)
-N = 2000
+N = 500
 
 train_dataset = []
 test_dataset = []
@@ -119,7 +119,7 @@ for epoch in tqdm(range(NUM_EPOCHS)):
         v, g = train_op(jnp.array(x), jnp.array(y), lr)
         losses.append(v)
         gradients.append(g)
-        gradient_norms.append(np.linalg.norm(g))
+        # gradient_norms.append(np.linalg.norm(g))
     train_losses.append(np.mean(losses))
     gra_n.append(np.mean(gradient_norms))
     if not epoch % 10:
