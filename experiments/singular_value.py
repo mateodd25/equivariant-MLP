@@ -7,7 +7,8 @@ from tqdm.auto import tqdm
 from torch.utils.data import DataLoader
 from time import time
 import gc
-import pickle 
+import pickle
+from scipy.sparse.linalg import svds
 from emlp.reps import (
     PermutationSequence,
     TrivialSequence,
@@ -28,12 +29,8 @@ def random_sample(size):
     return 10 * np.random.rand(size, size)
 
 def to_evaluate(x):
-    # y = sum(x)
-    # y = np.sum(np.sqrt(np.abs(x)))
-    # y = np.sum(np.abs(x))
-    # y = (np.trace(np.matrix(np.abs(x))))
-    # y = (np.sum(np.sqrt(np.diag(np.matrix(np.abs(x))))))
-    return np.trace(np.matrix(x))
+    _, _, vh = svds(x, k=1)
+    return vh.reshape(-1)
 
 
 def test_different_dimensions(NN, dimensions_to_extend, test_data):
@@ -56,7 +53,7 @@ def test_different_dimensions(NN, dimensions_to_extend, test_data):
 if __name__ == "__main__":
     np.random.seed(926)
     BS = 500
-    lr = 5e-3
+    lr = 1e-2
     NUM_EPOCHS = 1000
 
 
@@ -64,7 +61,7 @@ if __name__ == "__main__":
     TT = TrivialSequence(SS.group_sequence())
     V2 = SS * SS
     # inner = V2 + V2 + V2 + V2 + V2  
-    inner = V2 + V2 + V2 + V2 + SS + SS + SS + SS 
+    inner = V2 * SS
     # inner = (
         # V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS
     # )  # Two inner layers of this are good for l1 trace
@@ -82,13 +79,13 @@ if __name__ == "__main__":
     d = 8
     train_dataset = []
     test_dataset = []
-    N = 2000
+    N = 10000
     for j in range(N):
         x = random_sample(d)
         y = to_evaluate(x)
         train_dataset.append((x.reshape((d**2,)), y))
 
-    for j in range(N):
+    for j in range(100):
         x = random_sample(d)
         y = to_evaluate(x)
         test_dataset.append((x.reshape((d**2,)), y))
@@ -97,7 +94,7 @@ if __name__ == "__main__":
 
     def train_model(compatible):
         NN = EMLPSequence(
-            V2, TT,  2 * [inner], is_compatible=compatible
+            V2, SS,  2 * [inner], is_compatible=compatible
         )  # Rep in  # Rep out  # Hidden layers
         model = NN.emlp_at_level(d)
 
@@ -106,7 +103,7 @@ if __name__ == "__main__":
         @objax.Function.with_vars(model.vars())
         def loss(x, y):
             yhat = model(x)
-            return mean_squared_error(yhat.reshape(y.shape), y, None)
+            return mean_squared_error(yhat.reshape(y.shape), y, 0)
 
 
         grad_and_val = objax.GradValues(loss, model.vars())
@@ -172,42 +169,3 @@ if __name__ == "__main__":
 
     state = dict(times_comp=times_comp, times_free=times_free, mses_comp=mses_comp, mses_free=mses_free)
     pickle.dump(state, open("state.p", "wb"))
-
-    # import matplotlib.pyplot as plt
-
-    # plt.plot(np.arange(NUM_EPOCHS), train_losses_comp, label="Train loss")
-    # plt.plot(np.arange(0, NUM_EPOCHS, 10), test_losses_comp, label="Test loss")
-    # plt.legend()
-    # plt.yscale("log")
-    # plt.savefig("result.pdf")
-
-    # )
-        
-    
-    # model2 = models[0]
-    # model6 = models[4]
-
-    # small_e = np.eye(2)
-    # e = np.eye(5); e[2, 2] = 0; e[3, 3] = 0; e[4, 4] = 0
-
-    # print(f"Error small identity {np.abs(model(e.reshape(-1)) - model2(small_e.reshape(-1)))}")
-
-    # e = np.eye(5)
-    # big_e = np.eye(6)
-    # big_e[5, 5] = 0
-    # print(f"Error big identity {np.abs(model(e.reshape(-1)) - model6(big_e.reshape(-1)))}")
-
-    # small_e = np.outer( np.ones(2), np.ones(2))
-    # v = np.zeros(5)
-    # v[:2] = np.ones(2)
-    # e = np.outer(v,v)
-    # print(f"Error small ones {np.abs(model(e.reshape(-1)) - model2(small_e.reshape(-1)))}")
-
-    # e = np.outer(np.ones(5), np.ones(5))
-    # v = np.ones(6)
-    # v[-1] = 0
-    # big_e = np.outer(v,v)
-    # print(f"Error big ones {np.abs(model(e.reshape(-1)) - model6(big_e.reshape(-1)))}")
-
-    # maps = EquivariantOperatorSequence(V2, inner) 
-    
