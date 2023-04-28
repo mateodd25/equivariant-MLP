@@ -44,7 +44,6 @@ class SumRep(Rep):
         Gs = tuple(set(rep.G for rep in self.reps.keys()))
         self.G = Gs[0]
 
-
     def size(self):
         return sum(rep.size() * count for rep, count in self.reps.items())
 

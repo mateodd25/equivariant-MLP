@@ -109,7 +109,9 @@ class SumSequence(ConsistentSequence):
 
     def representation(self, j):
         """Direct sum representation"""
-        rep =  self.first_sequence.representation(j) + self.second_sequence.representation(j)
+        rep = self.first_sequence.representation(
+            j
+        ) + self.second_sequence.representation(j)
         rep.G = self.group_sequence().group(j)
         return rep
 
@@ -195,7 +197,6 @@ class EquivariantOperatorSequence(object):
         else:
             self.output_representation = output_representation
 
-            
             # self.presentation_degree = max(
         #     self.input_representation.presentation_degree,
         #     self.output_representation.presentation_degree,
@@ -206,11 +207,13 @@ class EquivariantOperatorSequence(object):
         constraints = []
         pre_dgr = self.input_representation.presentation_degree
         if j < pre_dgr:
-            raise ValueError(f"Can only extend when the level {j} is equal or larger than the presentation degree {pre_dgr}")
+            raise ValueError(
+                f"Can only extend when the level {j} is equal or larger than the presentation degree {pre_dgr}"
+            )
 
         constraints.extend(
             [
-                # Their kronecker version is backwards why?! 
+                # Their kronecker version is backwards why?!
                 LazyKron(
                     [
                         (
@@ -221,7 +224,9 @@ class EquivariantOperatorSequence(object):
                         self.input_representation.composite_embedding(j, k).H,
                     ]
                 )
-                for k in range(1, min(self.input_representation.presentation_degree, j - 1) + 1)
+                for k in range(
+                    1, min(self.input_representation.presentation_degree, j - 1) + 1
+                )
             ]
         )
         # constraints.extend(
@@ -243,29 +248,46 @@ class EquivariantOperatorSequence(object):
         return self.at_level(level).equivariant_basis()
 
     def composite_embedding(self, up_level, low_level):
-        return LazyKron([
-            self.output_representation.composite_embedding(up_level, low_level), 
-            self.input_representation.composite_embedding(up_level, low_level),
-        ])
-        
+        return LazyKron(
+            [
+                self.output_representation.composite_embedding(up_level, low_level),
+                self.input_representation.composite_embedding(up_level, low_level),
+            ]
+        )
+
     def extendability_constraints(self, n, n0):
         constraints = []
         constraints.append(
-            (self.input_representation.representation(n) >> self.output_representation.representation(n)).constraint_matrix())
-        constraints.append(LazyKron([self.output_representation.composite_embedding(n, n0).H, self.input_representation.composite_embedding(n,n0).H]))
+            (
+                self.input_representation.representation(n)
+                >> self.output_representation.representation(n)
+            ).constraint_matrix()
+        )
+        constraints.append(
+            LazyKron(
+                [
+                    self.output_representation.composite_embedding(n, n0).H,
+                    self.input_representation.composite_embedding(n, n0).H,
+                ]
+            )
+        )
         return ConcatLazy(constraints)
 
     def at_level(self, j):
-        return  EquivariantOperators(self.input_representation.representation(j),
-                                     self.output_representation.representation(j),
-                                     self.compatibility_constraints(j))
-    
+        return EquivariantOperators(
+            self.input_representation.representation(j),
+            self.output_representation.representation(j),
+            self.compatibility_constraints(j),
+        )
 
 
 @export
 class EquivariantOperators(object):
     def __init__(
-        self, input_representation, output_representation, compatibility_constraints=None
+        self,
+        input_representation,
+        output_representation,
+        compatibility_constraints=None,
     ):
         self.input_representation = input_representation
         self.output_representation = output_representation
@@ -334,14 +356,17 @@ class PermutationSequence(ConsistentSequence):
         """Pad with one zero."""
         return SlicedI(j + 1, j)
 
+
 @export
 class OrthogonalSequence(ConsistentSequence):
     """Orthogonal group representation sequence."""
 
     def __init__(self):
         """Initialize the sequence."""
-        self.presentation_degree = 1  # It is unclear whether this is the case, but it seems to be true.
-        self.generation_degree = 1 
+        self.presentation_degree = (
+            1  # It is unclear whether this is the case, but it seems to be true.
+        )
+        self.generation_degree = 1
         self._group_sequence = OrthogonalGroupSequence()
 
     # def group(self, j):

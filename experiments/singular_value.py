@@ -29,13 +29,16 @@ import scienceplots
 def random_sample(size):
     return np.random.rand(size, size)
 
+
 def to_evaluate(x):
     _, _, vh = svds(x, k=1)
     return vh.reshape(-1)
 
+
 def _norm_columns(x):
-    xnorms = (jnp.sum(x*x, 0))
+    xnorms = jnp.sum(x * x, 0)
     return xnorms
+
 
 def test_different_dimensions(NN, dimensions_to_extend, test_data):
     # models = []
@@ -44,13 +47,17 @@ def test_different_dimensions(NN, dimensions_to_extend, test_data):
     j = 0
     for i in dimensions_to_extend:
         ext_test_data = test_data[j]
-        j += 1        
+        j += 1
         t1 = time()
         model = NN.emlp_at_level(i, trained=True)
         times.append(time() - t1)
         mses.append(
             [
-                jnp.mean(1 - jnp.sum(model(x.reshape(-1)) * y, 0) ** 2 * (1/_norm_columns(model(x)) * (1/_norm_columns(y))))
+                jnp.mean(
+                    1
+                    - jnp.sum(model(x.reshape(-1)) * y, 0) ** 2
+                    * (1 / _norm_columns(model(x)) * (1 / _norm_columns(y)))
+                )
                 for x, y in ext_test_data
             ]
         )
@@ -58,6 +65,7 @@ def test_different_dimensions(NN, dimensions_to_extend, test_data):
         del model
         gc.collect()
     return times, mses
+
 
 # if __name__ == "__main__":
 np.random.seed(926)
@@ -70,10 +78,12 @@ OO = OrthogonalSequence()
 TT = TrivialSequence(OO.group_sequence())
 V2 = OO * OO
 inner = (V2 + OO + TT) * (V2 + OO + TT)
-num_inner_layers = 2
+num_inner_layers = 1
+
+
 # inner = V2 * SS
 # inner = (
-    # V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS
+# V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS
 # )  # Two inner layers of this are good for l1 trace
 # inner = V2 + V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS + SS + SS
 
@@ -101,23 +111,26 @@ for j in range(100):
     test_dataset.append((x.reshape((d**2,)), y))
 
 
-
 def train_model(compatible):
     NN = EMLPSequence(
-        V2, OO,  num_inner_layers * [inner], is_compatible=compatible
+        V2, OO, num_inner_layers * [inner], is_compatible=compatible
     )  # Rep in  # Rep out  # Hidden layers
     model = NN.emlp_at_level(d)
 
     opt = objax.optimizer.Adam(model.vars())
+
     @objax.Jit
     @objax.Function.with_vars(model.vars())
     def loss(x, y):
         yhat = model(x)
-        yhat = (yhat.reshape(y.shape))
-        return jnp.mean(1 - jnp.sum(yhat * y, 0) ** 2 * (1/_norm_columns(yhat) * (1/_norm_columns(y))))
+        yhat = yhat.reshape(y.shape)
+        return jnp.mean(
+            1
+            - jnp.sum(yhat * y, 0) ** 2
+            * (1 / _norm_columns(yhat) * (1 / _norm_columns(y)))
+        )
 
     grad_and_val = objax.GradValues(loss, model.vars())
-
 
     @objax.Jit
     @objax.Function.with_vars(model.vars() + opt.vars())
@@ -126,11 +139,9 @@ def train_model(compatible):
         opt(lr=lr, grads=g)
         return v, g
 
-
     trainloader = DataLoader(train_dataset, batch_size=BS, shuffle=True)
     testloader = DataLoader(test_dataset, batch_size=BS, shuffle=True)
     print("Generated the data")
-
 
     test_losses = []
     train_losses = []
@@ -153,16 +164,21 @@ def train_model(compatible):
             print(
                 f"Epoch {epoch} Train loss {train_losses[-1]} Test loss {train_losses[-1]} Grad norm {gra_n[-1]}"
             )
-    
+
     NN.set_trained_emlp_at_level(model)
-    return model, NN, train_losses, test_losses 
+    return model, NN, train_losses, test_losses
+
 
 model_free, NN_free, train_losses_free, test_losses_free = train_model(False)
-times_free, mses_free = test_different_dimensions(NN_free, dimensions_to_extend, interdimensional_test)
+times_free, mses_free = test_different_dimensions(
+    NN_free, dimensions_to_extend, interdimensional_test
+)
 
-    
+
 model_comp, NN_comp, train_losses_comp, test_losses_comp = train_model(True)
-times_comp, mses_comp = test_different_dimensions(NN_comp, dimensions_to_extend, interdimensional_test)
+times_comp, mses_comp = test_different_dimensions(
+    NN_comp, dimensions_to_extend, interdimensional_test
+)
 
 
 with plt.style.context(["science", "vibrant"]):
@@ -175,6 +191,10 @@ with plt.style.context(["science", "vibrant"]):
     ax.set(**ppar)
     plt.savefig("InterdimensionalSVD.pdf")
 
-
-    state = dict(times_comp=times_comp, times_free=times_free, mses_comp=mses_comp, mses_free=mses_free)
+    state = dict(
+        times_comp=times_comp,
+        times_free=times_free,
+        mses_comp=mses_comp,
+        mses_free=mses_free,
+    )
     pickle.dump(state, open("state.p", "wb"))

@@ -347,10 +347,10 @@ class S(Group):  # The permutation group
         # perms = np.arange(n)[None] + np.zeros((n - 1, 1)).astype(int)
         # perms[:, 0] = np.arange(1, n)
         # perms[np.arange(n - 1), np.arange(1, n)[None]] = 0
-        perms = np.arange(n)[None] + np.zeros((2,1)).astype(int)
+        perms = np.arange(n)[None] + np.zeros((2, 1)).astype(int)
         perms[0][0] = 1
         perms[0][1] = 0
-        perms[1][:-1] = np.arange(1,n)
+        perms[1][:-1] = np.arange(1, n)
         perms[1][-1] = 0
         self.discrete_generators = [LazyPerm(perm) for perm in perms]
         super().__init__(n)

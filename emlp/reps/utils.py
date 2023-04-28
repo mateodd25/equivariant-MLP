@@ -9,6 +9,7 @@ import jax.numpy as jnp
 import optax
 from emlp.utils import export
 
+
 class ConvergenceError(Exception):
     """Iterative method did not converge."""
 

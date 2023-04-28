@@ -152,6 +152,7 @@ class LinearOperator(object):
 
         self.dtype = np.dtype("float32")  # force float 32
         self.shape = shape
+        self.is_sparse = False
 
     def _init_dtype(self):
         """Called from subclasses at the end of the __init__ routine."""
@@ -198,7 +199,9 @@ class LinearOperator(object):
 
         M, N = self.shape
         if x.shape != (N,) and x.shape != (N, 1):
-            raise ValueError(f"Dimension mismatch x.shape = {x.shape} and self.shape = {self.shape}")
+            raise ValueError(
+                f"Dimension mismatch x.shape = {x.shape} and self.shape = {self.shape}"
+            )
 
         y = self._matvec(x)
 
@@ -431,24 +434,22 @@ class LinearOperator(object):
         multiplying by the identity"""
         return self @ np.eye(self.shape[-1])
 
-
     def to_sparse(self):
         """
         Returns a sparse csr_matrix.
         """
         n = self.shape[-1]
-        batch_size = round(min(n/100, 100))
-        repetitions = floor(n/batch_size)
-        reminder = n - repetitions*batch_size
+        batch_size = round(min(n / 100, 100))
+        repetitions = floor(n / batch_size)
+        reminder = n - repetitions * batch_size
         to_stack = []
         for j in tqdm(range(repetitions)):
-            to_stack.append(coo_matrix(self @ np.eye(n, batch_size, -j*batch_size)))
+            to_stack.append(coo_matrix(self @ np.eye(n, batch_size, -j * batch_size)))
         if reminder > 0:
-            to_stack.append(coo_matrix(self @ np.eye(n, reminder, -repetitions*batch_size)))
+            to_stack.append(
+                coo_matrix(self @ np.eye(n, reminder, -repetitions * batch_size))
+            )
         return hstack(to_stack)
-        
-            
-        
 
 
 class _CustomLinearOperator(LinearOperator):

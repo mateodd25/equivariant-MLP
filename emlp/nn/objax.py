@@ -301,6 +301,44 @@ class ExtendableLinear(nn.Linear):
 
 
 @export
+class ExtendableBilinear(Module):
+    """
+    Extendable bilinear layer.
+    """
+
+    def __init__(
+        self,
+        rep_in,
+        rep_out,
+        use_bias=True,
+        compatibility_constraints=None,
+        learned_parameters=None,
+    ):
+        super().__init__()
+        self.linear_one = ExtendableLinear(
+            rep_in,
+            rep_out,
+            include_bias=use_bias,
+            compatibility_constraints=compatibility_constraints,
+            learned_parameters=(
+                learned_parameters[0] if learned_parameters is not None else None
+            ),
+        )
+        self.linear_two = ExtendableLinear(
+            rep_in,
+            rep_out,
+            include_bias=use_bias,
+            compatibility_constraints=compatibility_constraints,
+            learned_parameters=(
+                learned_parameters[1] if learned_parameters is not None else None
+            ),
+        )
+
+    def __call__(self, x):
+        return self.linear_one(x) * self.linear_two(x)
+
+
+@export
 class ExtendableEMLPBlock(Module):
     def __init__(
         self,
@@ -311,21 +349,35 @@ class ExtendableEMLPBlock(Module):
         learned_parameters=None,
     ):
         super().__init__()
+        learned_linear_parameters = None
+        learned_bilinear_parameters = None
+        if learned_parameters is not None:
+            learned_linear_parameters = learned_parameters["linear"]
+            learned_bilinear_parameters = learned_parameters["bilinear"]
+
         self.linear = ExtendableLinear(
             rep_in,
             rep_out,
             include_bias=use_bias,
             compatibility_constraints=compatibility_constraints,
-            learned_parameters=learned_parameters,
+            learned_parameters=learned_linear_parameters,
         )
         # TODO: Implement Bilinear
-        # self.bilinear = ExtendableBilinear(rep_out, rep_out)
+        self.bilinear = ExtendableBilinear(
+            rep_in,
+            rep_out,
+            use_bias=use_bias,
+            compatibility_constraints=compatibility_constraints,
+            learned_parameters=learned_bilinear_parameters,
+        )
         # self.nonlinearity = GatedNonlinearity(rep_out)
         self.nonlinearity = ReluNonlinearity(rep_out)
 
     def __call__(self, x):
         lin = self.linear(x)
-        return self.nonlinearity(lin)
+        bi = self.bilinear(x)
+        return self.nonlinearity(bi + lin)
+        # return self.nonlinearity(lin)
 
 
 @export
@@ -376,7 +428,7 @@ class ExtendableEMLP(Module, metaclass=Named):
                     sequences[-1].representation(k),
                     self.rep_out,
                     include_bias=use_bias,
-                    learned_parameters=learned_parameters[-1],
+                    learned_parameters=learned_parameters[-1]["linear"],
                 ),
             )
 
@@ -476,25 +528,63 @@ class EMLPSequence(object):
             )
             right_hand_side = np.zeros(constraints.shape[0])
             # TODO: Make sure that the sizes here are right
-            right_hand_side[(-len(w)):] = w
+            right_hand_side[(-len(w)) :] = w
             # w_at_new_level, _, _, _ = np.linalg.solve(constraints.to_dense(), right_hand_side.reshape((len(right_hand_side), 1)))
-            map = (lambda x: constraints @ x)
-            w_at_new_level = linear_solve.solve_normal_cg(map, right_hand_side, init=np.ones(constraints.shape[1]))
+            map = lambda x: constraints @ x
+            w_at_new_level = linear_solve.solve_normal_cg(
+                map, right_hand_side, init=np.ones(constraints.shape[1])
+            )
 
             if self.use_bias:
                 constraints_b = seq_out.extendability_constraints(
                     level, self.trained_level
                 )
                 right_hand_side_b = np.zeros(constraints_b.shape[0])
-                right_hand_side_b[(-len(b)):] = b
-                map_b = (lambda x: constraints_b @ x)
+                right_hand_side_b[(-len(b)) :] = b
+                map_b = lambda x: constraints_b @ x
                 b_at_new_level = linear_solve.solve_normal_cg(
-                    constraints_b, right_hand_side_b, init=np.ones(constraints_b.shape[1])
+                    constraints_b,
+                    right_hand_side_b,
+                    init=np.ones(constraints_b.shape[1]),
                 )
         return (
             w_at_new_level.reshape(seq_out.dimension(level), seq_in.dimension(level)),
             b_at_new_level,
         )
+
+    def _extend_parameters_for_bilinear_layer(
+        self, level, learned_layer, seq_in, seq_out
+    ):
+        w_1, b_1 = self._extend_parameters_for_linear_layer(
+            level, learned_layer.linear_one, seq_in, seq_out
+        )
+        w_2, b_2 = self._extend_parameters_for_linear_layer(
+            level, learned_layer.linear_two, seq_in, seq_out
+        )
+        return (w_1, b_1), (w_2, b_2)
+
+    def _extend_parameters_for_layer(self, level, learned_layer, seq_in, seq_out):
+        if isinstance(learned_layer, ExtendableEMLPBlock):
+            linear_layer = learned_layer.linear
+            bilinear_layer = learned_layer.bilinear
+
+        elif isinstance(learned_layer, ExtendableLinear):
+            linear_layer = learned_layer
+            bilinear_layer = None
+        else:
+            raise ValueError(f"Cannot extend layer {learned_layer}")
+
+        parameters = dict()
+        parameters["linear"] = self._extend_parameters_for_linear_layer(
+            level, linear_layer, seq_in, seq_out
+        )
+
+        if bilinear_layer is not None:
+            parameters["bilinear"] = self._extend_parameters_for_bilinear_layer(
+                level, bilinear_layer, seq_in, seq_out
+            )
+
+        return parameters
 
     # TODO: Store a cached version of already evaluated levels, so as to not repeat computations.
     def emlp_at_level(self, level, trained=False):
@@ -514,28 +604,10 @@ class EMLPSequence(object):
                 print(f"Extending layer {i}")
                 seq_in = sequences[i]
                 seq_out = sequences[i + 1]
-
-                if isinstance(layer, ExtendableEMLPBlock):
-                    linear_layer = layer.linear
-
-                elif isinstance(layer, ExtendableLinear):
-                    linear_layer = layer
-
-                else:
-                    raise ValueError(f"Cannot extend layer {layer}")
-
-                (
-                    w_at_new_level,
-                    b_at_new_level,
-                ) = self._extend_parameters_for_linear_layer(
-                    level, linear_layer, seq_in, seq_out
-                )
                 learned_parameters.append(
-                    (
-                        w_at_new_level,
-                        b_at_new_level,
-                    )
+                    self._extend_parameters_for_layer(level, layer, seq_in, seq_out)
                 )
+
             return ExtendableEMLP(
                 self.sequence_in,
                 self.sequence_out,
@@ -546,7 +618,6 @@ class EMLPSequence(object):
                 learned_parameters=learned_parameters,
             )
 
-        # TODO: Make it work once things are trained
         # If the sequence is not trained, return a randomly initialized EMLP.
         return ExtendableEMLP(
             self.sequence_in,

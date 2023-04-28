@@ -5,8 +5,11 @@ from jax import jit
 import jax
 from functools import reduce
 from emlp.utils import export
+from scipy.sparse import csr_matrix, vstack, kron
 
 product = lambda c: reduce(lambda a, b: a * b, c)
+
+
 # TODO: Remove this export decorator eventually.
 @export
 def lazify(x):
@@ -51,6 +54,7 @@ class LazyKron(LinearOperator):
         shape = product([Mi.shape[0] for Mi in Ms]), product([Mi.shape[1] for Mi in Ms])
         # self.dtype=Ms[0].dtype
         super().__init__(None, shape)
+        self.is_sparse = np.array([M.is_sparse for M in Ms]).all()
 
     def _matvec(self, v):
         return self._matmat(v).reshape(-1)
@@ -79,6 +83,13 @@ class LazyKron(LinearOperator):
         if len(Ms) == 1:
             return Ms[0]
         return super().__new__(cls)
+
+    def to_sparse(self):
+        sparse_Ms = [
+            M.to_sparse() if isinstance(M, LinearOperator) else csr_matrix(M)
+            for M in self.Ms
+        ]
+        return reduce(kron, sparse_Ms)
 
 
 # @jit
@@ -156,6 +167,7 @@ class ConcatLazy(LinearOperator):
             M.shape[1] == Ms[0].shape[1] for M in Ms
         ), f"Trying to concatenate matrices of different sizes {[M.shape for M in Ms]}"
         shape = (sum(M.shape[0] for M in Ms), Ms[0].shape[1])
+        self.is_sparse = np.array([M.is_sparse for M in Ms]).all()
         super().__init__(None, shape)
 
     def _matmat(self, V):
@@ -167,7 +179,7 @@ class ConcatLazy(LinearOperator):
         for M in self.Ms:
             sum += M.shape[0]
             indices.append(sum)
-            
+
         Vs = jnp.split(V, indices)
         return reduce(np.add, [self.Ms[i].T @ Vs[i] for i in range(len(self.Ms))])
 
@@ -179,6 +191,13 @@ class ConcatLazy(LinearOperator):
             M.to_dense() if isinstance(M, LinearOperator) else M for M in self.Ms
         ]
         return jnp.concatenate(dense_Ms, axis=0)
+
+    def to_sparse(self):
+        sparse_Ms = [
+            M.to_sparse() if isinstance(M, LinearOperator) else csr_matrix(M)
+            for M in self.Ms
+        ]
+        return reduce(vstack, sparse_Ms)
 
 
 class LazyDirectSum(LinearOperator):
@@ -240,6 +259,7 @@ class LazyPerm(LinearOperator):
     def __init__(self, perm):
         self.perm = perm
         shape = (len(perm), len(perm))
+        self.is_sparse = True
         super().__init__(None, shape)
 
     def _matmat(self, V):
@@ -253,6 +273,13 @@ class LazyPerm(LinearOperator):
 
     def invT(self):
         return self
+
+    def to_sparse(self):
+        n = len(self.perm)
+        rows = np.arange(n)
+        columns = self.perm
+        data = np.ones(n).astype(int)
+        return csr_matrix((data, (rows, columns)), (n, n))
 
 
 class LazyShift(LinearOperator):
@@ -331,7 +358,7 @@ class SlicedI(LinearOperator):
                 [V, jnp.zeros((self.n - self.k, V.shape[1]))], axis=0
             )
         else:
-            return V[0:self.n, :]
+            return V[0 : self.n, :]
 
     def _matvec(self, V):
         if self.n == self.k:
@@ -341,7 +368,7 @@ class SlicedI(LinearOperator):
             if self.k == 1:
                 res[0] = V[0]
             else:
-                res[0:(self.k)] = V
+                res[0 : (self.k)] = V
             return res
         else:
             return V[0 : self.n]
