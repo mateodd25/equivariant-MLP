@@ -249,7 +249,7 @@ class ExtendableLinear(nn.Linear):
                 self.bias_basis = repout.equivariant_basis()
                 self.bias_size = self.bias_basis.shape[1]
                 self.b = TrainVar(
-                    objax.random.uniform((self.bias_size,)) / jnp.sqrt(1000)
+                    objax.random.uniform((self.bias_size,)) / jnp.sqrt(1e2)
                 )
                 print("Use bias")
             else:
@@ -267,7 +267,7 @@ class ExtendableLinear(nn.Linear):
                 self.basis = rep_W.equivariant_basis()
                 print("Not compatatible")
             basis_size = self.basis.shape[1]
-            self.w = TrainVar(objax.random.uniform((basis_size,)) / jnp.sqrt(1000))
+            self.w = TrainVar(objax.random.uniform((basis_size,)) / jnp.sqrt(1e2))
 
     def __call__(self, x):
         logging.debug(f"Linear in shape: {x.shape}")
@@ -346,14 +346,17 @@ class ExtendableEMLPBlock(Module):
         rep_out,
         compatibility_constraints=None,
         use_bias=True,
+        use_bilinear=True,
         learned_parameters=None,
     ):
         super().__init__()
+        self.use_bilinear = use_bilinear
         learned_linear_parameters = None
         learned_bilinear_parameters = None
         if learned_parameters is not None:
             learned_linear_parameters = learned_parameters["linear"]
-            learned_bilinear_parameters = learned_parameters["bilinear"]
+            if use_bilinear:
+                learned_bilinear_parameters = learned_parameters["bilinear"]
 
         self.linear = ExtendableLinear(
             rep_in,
@@ -363,21 +366,22 @@ class ExtendableEMLPBlock(Module):
             learned_parameters=learned_linear_parameters,
         )
         # TODO: Implement Bilinear
-        self.bilinear = ExtendableBilinear(
-            rep_in,
-            rep_out,
-            use_bias=use_bias,
-            compatibility_constraints=compatibility_constraints,
-            learned_parameters=learned_bilinear_parameters,
-        )
-        # self.nonlinearity = GatedNonlinearity(rep_out)
+        if use_bilinear:
+            self.bilinear = ExtendableBilinear(
+	            rep_in,
+	            rep_out,
+	            use_bias=use_bias,
+	            compatibility_constraints=compatibility_constraints,
+	            learned_parameters=learned_bilinear_parameters,
+	        )
+	        # self.nonlinearity = GatedNonlinearity(rep_out)
         self.nonlinearity = ReluNonlinearity(rep_out)
 
     def __call__(self, x):
-        lin = self.linear(x)
-        bi = self.bilinear(x)
-        return self.nonlinearity(bi + lin)
-        # return self.nonlinearity(lin)
+        res = self.linear(x)
+        if self.use_bilinear:
+            res += self.bilinear(x)
+        return self.nonlinearity(res)
 
 
 @export
@@ -397,6 +401,7 @@ class ExtendableEMLP(Module, metaclass=Named):
         k,
         is_compatible=False,
         use_bias=True,
+        use_bilinear=True,
         learned_parameters=None,
     ):
         self.rep_in = sequence_in.representation(k)
@@ -404,6 +409,7 @@ class ExtendableEMLP(Module, metaclass=Named):
         self.G = self.rep_in.G
         self.is_compatible = is_compatible
         self.level = k
+        self.use_bilinear = use_bilinear
 
         if learned_parameters is not None:
             # TODO: Add checks to ensure that he learned parameters make sense for the given sequences
@@ -418,6 +424,7 @@ class ExtendableEMLP(Module, metaclass=Named):
                         sout.representation(k),
                         compatibility_constraints=None,
                         use_bias=use_bias,
+                        use_bilinear=use_bilinear,
                         learned_parameters=learned_parameters[j],
                     )
                 )
@@ -446,6 +453,7 @@ class ExtendableEMLP(Module, metaclass=Named):
                                 sin, sout
                             ).compatibility_constraints(k),
                             use_bias=use_bias,
+                            use_bilinear=use_bilinear,
                         )
                     )
 
@@ -468,7 +476,7 @@ class ExtendableEMLP(Module, metaclass=Named):
                 logging.info(f"Reps: {reps}")
                 self.network = Sequential(
                     *[
-                        ExtendableEMLPBlock(rin, rout)
+                        ExtendableEMLPBlock(rin, rout, use_bilinear=use_bilinear)
                         for rin, rout in zip(reps, reps[1:])
                     ],
                     ExtendableLinear(reps[-1], self.rep_out),
@@ -487,7 +495,7 @@ class EMLPSequence(object):
     """
 
     def __init__(
-        self, sequence_in, sequence_out, hidden_sequences, is_compatible=False
+            self, sequence_in, sequence_out, hidden_sequences, is_compatible=False, use_bilinear=True
     ):
         self.is_trained = False
         self.trained_level = -1  # Level at which the EMLP was trained
@@ -497,6 +505,7 @@ class EMLPSequence(object):
         self.hidden_sequences = hidden_sequences
         self.is_compatible = is_compatible
         self.use_bias = not is_compatible
+        self.use_bilinear = use_bilinear
 
     def _extend_parameters_for_linear_layer(
         self, level, learned_layer, seq_in, seq_out
@@ -564,13 +573,17 @@ class EMLPSequence(object):
         return (w_1, b_1), (w_2, b_2)
 
     def _extend_parameters_for_layer(self, level, learned_layer, seq_in, seq_out):
+        """
+        Extends the parameters of an ExtendableEMLPBlock or an ExtendableLinear layer. 
+        """
+        bilinear_layer = None
         if isinstance(learned_layer, ExtendableEMLPBlock):
             linear_layer = learned_layer.linear
-            bilinear_layer = learned_layer.bilinear
+            if learned_layer.use_bilinear:
+                bilinear_layer = learned_layer.bilinear
 
         elif isinstance(learned_layer, ExtendableLinear):
             linear_layer = learned_layer
-            bilinear_layer = None
         else:
             raise ValueError(f"Cannot extend layer {learned_layer}")
 
@@ -615,6 +628,7 @@ class EMLPSequence(object):
                 level,
                 self.is_compatible,
                 self.use_bias,
+                self.use_bilinear,
                 learned_parameters=learned_parameters,
             )
 
@@ -626,6 +640,7 @@ class EMLPSequence(object):
             level,  # Level
             is_compatible=self.is_compatible,
             use_bias=(not self.is_compatible),
+            use_bilinear=self.use_bilinear,
         )
 
     def set_trained_emlp_at_level(self, emlp: ExtendableEMLP):

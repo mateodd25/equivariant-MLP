@@ -25,7 +25,7 @@ import scienceplots
 
 
 def random_sample(size):
-    return 10 * np.random.rand(size, size)
+    return  np.random.randn(size, size)
 
 
 def to_evaluate(x):
@@ -60,14 +60,14 @@ def test_different_dimensions(NN, dimensions_to_extend, test_data):
 if __name__ == "__main__":
     np.random.seed(926)
     BS = 500
-    lr = 5e-3
+    lr = 1e-2
     NUM_EPOCHS = 1000
 
     SS = PermutationSequence()
     TT = TrivialSequence(SS.group_sequence())
     V2 = SS * SS
-    inner = V2 + V2 + V2 + SS + SS + SS
-    # inner = V2 + V2 + V2 + V2 + SS + SS + SS + SS
+    # inner = V2 + V2 + V2 + SS + SS + SS
+    inner = V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS
     # inner = (
     # V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS
     # )  # Two inner layers of this are good for l1 trace
@@ -82,7 +82,7 @@ if __name__ == "__main__":
             ext_test_data.append((x, to_evaluate(x)))
         interdimensional_test.append(ext_test_data)
 
-    d = 4
+    d = 6
     train_dataset = []
     test_dataset = []
     N = 2000
@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
     def train_model(compatible):
         NN = EMLPSequence(
-            V2, TT, 2 * [inner], is_compatible=compatible
+            V2, TT, 2 * [inner], is_compatible=compatible, use_bilinear=False
         )  # Rep in  # Rep out  # Hidden layers
         model = NN.emlp_at_level(d)
 
@@ -142,7 +142,7 @@ if __name__ == "__main__":
                     np.mean([loss(jnp.array(x), jnp.array(y)) for (x, y) in testloader])
                 )
                 print(
-                    f"Epoch {epoch} Train loss {train_losses[-1]} Test loss {train_losses[-1]} Grad norm {gra_n[-1]}"
+                    f"Epoch {epoch} Train loss {train_losses[-1]} Test loss {test_losses[-1]} Grad norm {gra_n[-1]}"
                 )
 
         NN.set_trained_emlp_at_level(model)
