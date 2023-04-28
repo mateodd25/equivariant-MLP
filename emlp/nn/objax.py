@@ -242,7 +242,7 @@ class ExtendableLinear(nn.Linear):
                 )
 
         else:
-            # Otherwirse, the parameters are not learn and we should learn the
+            # Otherwise, the parameters are not learn and we should learn the
             # coefficients multiplying the basis.
             self.use_basis = True
             if include_bias:
