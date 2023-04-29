@@ -8,7 +8,8 @@ from ..group_sequences import PermutationGroupSequence, OrthogonalGroupSequence
 from .linear_operators import I, LazyDirectSum, LazyKron, SlicedI, lazify, ConcatLazy
 from .representation import ScalarRep, V
 from .utils import null_space
-
+from functools import reduce
+from collections import defaultdict
 
 @export
 class ConsistentSequence(object):
@@ -77,7 +78,20 @@ class ConsistentSequence(object):
     def __rmul__(self, other):
         return mul_sequences(other, self)
 
+@export 
+def gated(sequence: ConsistentSequence) -> ConsistentSequence:
+    """
+        
+    """
 
+    if 
+
+@export 
+class GatedSequence(ConsistentSequence): 
+    def __init__():
+        
+
+    
 # --------------------------------------------------------------------------------
 # Operations
 # --------------------------------------------------------------------------------
@@ -92,10 +106,38 @@ class SumSequence(ConsistentSequence):
 
     def group_sequence(self):
         """Group sequence shared by both summands"""
-        return self.first_sequence.group_sequence()
+        return self._group_sequence
 
     # def __init__(self, *sequences):
 
+    def __init__(self, *sequences):
+        sequences = [
+            SumSequenceFromCollection({TrivialSequence: seq}) if isinstance(seq, int) else seq 
+            for seq in sequences
+        ]
+        seq_counters = [
+            seq.sequences if isinstance(seq, SumSequence) else {seq: 1} for seq in sequences 
+        ]
+        self.sequences = self._compute_canonical(seq_counters)
+        self.generation_degree = reduce(max, [seq.generation_degree for seq in self.sequences.keys()])       
+        self.presentation_degree = reduce(max, [seq.presentation_degree for seq in self.sequences.keys()])       
+        self._group_sequence = next(iter(self.sequences)).group_sequence()
+        self.is_permutation = all([seq.is_permutation for seq in self.sequences.keys()])
+        # self._num_summands = sum([ for ])
+        
+    def _compute_canonical(self, seq_counters):
+        unique_seq = sorted(reduce(lambda a, b: a | b, [seq.keys() for seq in seq_counters]))
+        merged_counts = defaultdict(int)
+        ids = [0] * len(seq_counters)
+        for pair in seq_counters:
+            seq = next(iter(pair.keys()))
+            counter = pair[seq]
+            merged_counts[seq] += counter 
+        return merged_counts
+            
+    def num_sumands(self):
+        return len(sel)
+        
     def __init__(self, first_sequence, second_sequence):
         """Initialize with the two summands."""
         self.first_sequence = first_sequence
@@ -106,6 +148,7 @@ class SumSequence(ConsistentSequence):
         self.generation_degree = max(
             first_sequence.generation_degree, second_sequence.generation_degree
         )
+        self.is_permutation = first_sequence.is_permutation and second_sequence.is_permutation
 
     def representation(self, j):
         """Direct sum representation"""
@@ -121,7 +164,14 @@ class SumSequence(ConsistentSequence):
             [self.first_sequence.up_embedding(j), self.second_sequence.up_embedding(j)]
         )
 
-
+class SumSequenceFromCollection(SumSequence):
+    def __init__(self, counter, perm=None):
+        self.sequences = counter
+        self.perm = np.arange(self.num_sumands()) if perm is None else perm
+        self.sequences, self.perm = self._compute_canonical([counter], [self.perm])
+        self.invperm = np.argsort(self.perm)
+        self.is_permutation = all(rep.is_permutation for rep in self.sequences.keys())
+    
 class ProductSequence(ConsistentSequence):
     """Product sequence between two sequences."""
 
@@ -138,6 +188,7 @@ class ProductSequence(ConsistentSequence):
         self.generation_degree = (
             first_sequence.generation_degree + second_sequence.generation_degree
         )
+        self.is_permutation = first_sequence.is_permutation and second_sequence.is_permutation
 
     def representation(self, j):
         r"""Tensor product representation"""
@@ -229,19 +280,6 @@ class EquivariantOperatorSequence(object):
                 )
             ]
         )
-        # constraints.extend(
-        #     [
-        #         LazyKron(
-        #             [
-        #                 I(j)
-        #                 - self.input_representation.composite_embedding(j, k)
-        #                 @ self.input_representation.composite_embedding(j, k).H,
-        #                 self.output_representation.composite_embedding(j, k).H,
-        #             ]
-        #         )
-        #         for k in range(1, self.output_representation.generation_degree + 1)
-        #     ]
-        # )
         return ConcatLazy(constraints)
 
     def equivariant_basis(self, level):
@@ -315,6 +353,7 @@ class TrivialSequence(ConsistentSequence):
         self._group_sequence = group_sequence
         self.presentation_degree = 1
         self.generation_degree = 1
+        self.is_permutation = True
 
     def group(self, j):
         """Return the group at level j."""
@@ -344,6 +383,7 @@ class PermutationSequence(ConsistentSequence):
         self.presentation_degree = 2
         self.generation_degree = 2
         self._group_sequence = PermutationGroupSequence()
+        self.is_permutation = True
 
     # def group(self, j):
     # return self.group_sequence().group(j)
@@ -368,6 +408,7 @@ class OrthogonalSequence(ConsistentSequence):
         )
         self.generation_degree = 1
         self._group_sequence = OrthogonalGroupSequence()
+        self.is_permutation = False
 
     # def group(self, j):
     # return self.group_sequence().group(j)
