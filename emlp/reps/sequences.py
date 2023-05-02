@@ -78,18 +78,21 @@ class ConsistentSequence(object):
     def __rmul__(self, other):
         return mul_sequences(other, self)
 
-@export 
-def gated(sequence: ConsistentSequence) -> ConsistentSequence:
-    """
-        
-    """
-
-    if 
 
 @export 
 class GatedSequence(ConsistentSequence): 
-    def __init__():
-        
+    """
+        A Gated Sequence.
+
+    Gated sequences contain additional trivial sequences for each irreducible 
+    that is not a permutation-like, i.e., representations that do not accept
+    component-wise activation function.s
+    """
+    def __init__(self, input: ConsistentSequence):
+        pass
+
+    def gated_indices(self, level):
+        pass
 
     
 # --------------------------------------------------------------------------------
