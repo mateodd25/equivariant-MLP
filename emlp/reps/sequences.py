@@ -7,6 +7,7 @@ from plum import dispatch
 from ..group_sequences import PermutationGroupSequence, OrthogonalGroupSequence
 from .linear_operators import I, LazyDirectSum, LazyKron, SlicedI, lazify, ConcatLazy
 from .representation import ScalarRep, V
+from .product_sum_reps import SumRep
 from .utils import null_space
 from functools import reduce
 from collections import defaultdict
@@ -78,7 +79,37 @@ class ConsistentSequence(object):
     def __rmul__(self, other):
         return mul_sequences(other, self)
 
+    def __hash__(self):
+        d1 = tuple(
+            [
+                (k, v)
+                for k, v in self.__dict__.items()
+                if (k not in ["_size", "is_permutation", "is_orthogonal"])
+            ]
+        )
+        return hash((type(self), d1))
 
+    def __rshift__(self, other):
+        """Linear maps from self -> other."""
+        return EquivariantOperatorSequence(self, other)
+
+    def __lshift__(self, other):
+        return EquivariantOperatorSequence(other, self)
+
+    def __lt__(self, other):
+        if isinstance(other, TrivialSequence): 
+            return False 
+        elif isinstance(self, TrivialSequence):
+            return True
+        try: 
+            if self.group_sequence() < other.group_sequence():
+                return True
+            elif self.group_sequence() > other.group_sequence():
+                return False
+        except:
+            pass 
+        return hash(self) < hash(other)
+        
 @export 
 class GatedSequence(ConsistentSequence): 
     """
@@ -107,13 +138,9 @@ class GatedSequence(ConsistentSequence):
 class SumSequence(ConsistentSequence):
     """Sum sequence between two sequences"""
 
-    def group_sequence(self):
-        """Group sequence shared by both summands"""
-        return self._group_sequence
-
-    # def __init__(self, *sequences):
 
     def __init__(self, *sequences):
+        """Constructs a sum sequence from a list of sequences."""
         sequences = [
             SumSequenceFromCollection({TrivialSequence: seq}) if isinstance(seq, int) else seq 
             for seq in sequences
@@ -139,32 +166,61 @@ class SumSequence(ConsistentSequence):
         return merged_counts
             
     def num_sumands(self):
-        return len(sel)
+        pass
+        # return len(sel)
+
+    def __hash__(self):
+        return hash(tuple(self.reps.items()))
         
-    def __init__(self, first_sequence, second_sequence):
-        """Initialize with the two summands."""
-        self.first_sequence = first_sequence
-        self.second_sequence = second_sequence
-        self.presentation_degree = max(
-            first_sequence.presentation_degree, second_sequence.presentation_degree
-        )
-        self.generation_degree = max(
-            first_sequence.generation_degree, second_sequence.generation_degree
-        )
-        self.is_permutation = first_sequence.is_permutation and second_sequence.is_permutation
+    # def __init__(self, first_sequence, second_sequence):
+    #     """Initialize with the two summands."""
+    #     self.first_sequence = first_sequence
+    #     self.second_sequence = second_sequence
+    #     self.presentation_degree = max(
+    #         first_sequence.presentation_degree, second_sequence.presentation_degree
+    #     )
+    #     self.generation_degree = max(
+    #         first_sequence.generation_degree, second_sequence.generation_degree
+    #     )
+    #     self.is_permutation = first_sequence.is_permutation and second_sequence.is_permutation
+    #     self._group_sequence = first_sequence.group_sequence()
+
+    # def representation(self, j):
+    #     """Direct sum representation"""
+    #     rep = self.first_sequence.representation(
+    #         j
+    #     ) + self.second_sequence.representation(j)
+    #     rep.G = self.group_sequence().group(j)
+    #     return rep
+
+    # def up_embedding(self, j):
+        # return LazyDirectSum(
+        #     [self.first_sequence.up_embedding(j), self.second_sequence.up_embedding(j)]
+        # )
 
     def representation(self, j):
-        """Direct sum representation"""
-        rep = self.first_sequence.representation(
-            j
-        ) + self.second_sequence.representation(j)
-        rep.G = self.group_sequence().group(j)
-        return rep
+        reps = [count * seq.representation(j) for seq, count in self.sequences.items()]
+        return SumRep(*reps)
 
     def up_embedding(self, j):
         """Direct sum of the embeddings"""
-        return LazyDirectSum(
-            [self.first_sequence.up_embedding(j), self.second_sequence.up_embedding(j)]
+        up_embeddings = [seq.up_embedding(j) for seq in self.sequences]
+        multiplicities = self.sequences.values()
+        return LazyDirectSum(up_embeddings, multiplicities)
+
+    def group_sequence(self):
+        """Group sequence shared by both summands"""
+        return self._group_sequence
+
+    def __repr__(self):
+        return "+".join(
+            f"{count if count > 1 else ""}{repr(sequence)}"
+            for sequence, count, in self.sequences.items()
+        )
+    def __str__(self):
+        return "+".join(
+            f"{count if count > 1 else ""}{sequence}"
+            for sequence, count, in self.sequences.items()
         )
 
 class SumSequenceFromCollection(SumSequence):
@@ -250,11 +306,6 @@ class EquivariantOperatorSequence(object):
             self.output_representation = input_representation
         else:
             self.output_representation = output_representation
-
-            # self.presentation_degree = max(
-        #     self.input_representation.presentation_degree,
-        #     self.output_representation.presentation_degree,
-        # )
 
     def compatibility_constraints(self, j):
         """Constraints that ensure that the basis at level j is extendable."""
@@ -344,10 +395,8 @@ class EquivariantOperators(object):
 
 
 # --------------------------------------------------------------------------------
-# Implementations of consistent sequences
+# Consistent sequence implementations 
 # --------------------------------------------------------------------------------
-
-
 @export
 class TrivialSequence(ConsistentSequence):
     r"""Trivial sequence, the representations at all levels are 1."""
@@ -388,9 +437,6 @@ class PermutationSequence(ConsistentSequence):
         self._group_sequence = PermutationGroupSequence()
         self.is_permutation = True
 
-    # def group(self, j):
-    # return self.group_sequence().group(j)
-
     def group_sequence(self):
         """Return the permutation group in j elements."""
         return self._group_sequence
@@ -412,9 +458,6 @@ class OrthogonalSequence(ConsistentSequence):
         self.generation_degree = 1
         self._group_sequence = OrthogonalGroupSequence()
         self.is_permutation = False
-
-    # def group(self, j):
-    # return self.group_sequence().group(j)
 
     def group_sequence(self):
         """Return the permutation group in j elements."""

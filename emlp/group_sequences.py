@@ -11,10 +11,18 @@ class GroupSequence(object):
         """Return group at level j."""
         return NotImplementedError
 
+    def __repr__(self):
+        return f"{self.__class__}"
+
+    def __hash__(self):
+        return hash(repr(self))
+
+    def __lt__(self, other):
+        return hasn(self) < hash(other)
 
 @export
 class PermutationGroupSequence(GroupSequence):
-    """Sequence of permutation groups."""
+    """Sequence of permutation groups S(n)."""
 
     def __init__(self):
         """Initiate lazy sequence."""
@@ -27,12 +35,10 @@ class PermutationGroupSequence(GroupSequence):
 
 @export
 class OrthogonalGroupSequence(GroupSequence):
-    """
-    Sequence of orthogonal groups O(n).
-    """
+    """Sequence of orthogonal groups O(n)."""
 
     def __init__(self):
-        """Initialize laxy sequnece."""
+        """Initialize lazy sequnece."""
         self.name = "orthogonal"
 
     def group(self, j):
