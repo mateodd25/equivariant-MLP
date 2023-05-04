@@ -224,7 +224,7 @@ class LazyDirectSum(LinearOperator):
         return lazy_direct_matmat(v, self.Ms, self.multiplicities)
 
     def _adjoint(self):
-        return LazyDirectSum([Mi.T for Mi in self.Ms])
+        return LazyDirectSum([Mi.T for Mi in self.Ms], self.multiplicities)
 
     def invT(self):
         return LazyDirectSum([M.invT() for M in self.Ms])
