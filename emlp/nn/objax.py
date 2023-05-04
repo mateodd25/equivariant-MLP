@@ -104,7 +104,7 @@ class GatedNonlinearity(Module):
 
     def __call__(self, values):
         gate_scalars = values[..., gate_indices(self.rep)]
-        activations = jax.nn.relu(gate_scalars) * values[..., : self.rep.size()]
+        activations = jax.nn.sigmoid(gate_scalars) * values[..., : self.rep.size()]
         return activations
 
 
@@ -347,6 +347,7 @@ class ExtendableEMLPBlock(Module):
         compatibility_constraints=None,
         use_bias=True,
         use_bilinear=True,
+        use_gates=True,
         learned_parameters=None,
     ):
         super().__init__()
@@ -365,7 +366,6 @@ class ExtendableEMLPBlock(Module):
             compatibility_constraints=compatibility_constraints,
             learned_parameters=learned_linear_parameters,
         )
-        # TODO: Implement Bilinear
         if use_bilinear:
             self.bilinear = ExtendableBilinear(
 	            rep_in,
@@ -374,8 +374,10 @@ class ExtendableEMLPBlock(Module):
 	            compatibility_constraints=compatibility_constraints,
 	            learned_parameters=learned_bilinear_parameters,
 	        )
-	        # self.nonlinearity = GatedNonlinearity(rep_out)
-        self.nonlinearity = ReluNonlinearity(rep_out)
+        if use_gates:
+	        self.nonlinearity = GatedNonlinearity(rep_out)
+        else:
+            self.nonlinearity = ReluNonlinearity(rep_out)
 
     def __call__(self, x):
         res = self.linear(x)
@@ -386,8 +388,7 @@ class ExtendableEMLPBlock(Module):
 
 @export
 class ExtendableEMLP(Module, metaclass=Named):
-    """
-    Given a sequence of architectures. It creates an EMLP at level k.
+    """Given a sequence of architectures. It creates an EMLP at level k.
 
     The argument is_compatible determines whether the EMLP satisfies compatibility conditions.
     If learned_parameters = {(W_i, b_i)} is not null it initializes the layers with these parameters.
@@ -412,7 +413,7 @@ class ExtendableEMLP(Module, metaclass=Named):
         self.use_bilinear = use_bilinear
 
         if learned_parameters is not None:
-            # TODO: Add checks to ensure that he learned parameters make sense for the given sequences
+            # TODO: Add checks to ensure that we learned parameters make sense for the given sequences
             self.use_basis = False
             sequences = [sequence_in] + hidden_sequences
             j = 0

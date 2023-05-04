@@ -112,18 +112,44 @@ class ConsistentSequence(object):
         
 @export 
 class GatedSequence(ConsistentSequence): 
-    """
-        A Gated Sequence.
+    """A Gated Sequence.
 
     Gated sequences contain additional trivial sequences for each irreducible 
     that is not a permutation-like, i.e., representations that do not accept
     component-wise activation function.s
     """
     def __init__(self, input: ConsistentSequence):
-        pass
+        self._original_sequence = input
+        self.generation_degree = input.generation_degree 
+        self.presentation_degree = input.presentation_degree
 
+        if isinstance(input, SumSequence):
+            self._gated_sequence = input + sum(
+                [
+                    TrivialSequence(input.group_sequence())
+                    for sequence in input.sequences
+                    if not isinstance(sequence, TrivialSequence) and not sequence.is_permutation
+                ]
+            )
+        else:
+            self._gated_sequence = input + TrivialSequence(input.group_sequence()) if not input.is_permutation else input
+            
     def gated_indices(self, level):
-        pass
+        
+    def group_sequence(self):
+        return self._original_sequence.group_sequence()
+
+    def dimension(self, j):
+        return self._gated_sequence.size()
+
+    def up_embedding(self, j):
+        return self._gated_sequence.up_embedding(j)
+
+    def representation(self, j):
+        return self._gated_sequence.rrepresentation(j)
+
+    def extendability_constraints(self, n, n0):
+        return self._gated_sequence.extendability_constraints(n, n0)
 
     
 # --------------------------------------------------------------------------------
@@ -214,12 +240,12 @@ class SumSequence(ConsistentSequence):
 
     def __repr__(self):
         return "+".join(
-            f"{count if count > 1 else ""}{repr(sequence)}"
+            f"{count if count > 1 else ''}{repr(sequence)}"
             for sequence, count, in self.sequences.items()
         )
     def __str__(self):
         return "+".join(
-            f"{count if count > 1 else ""}{sequence}"
+            f"{count if count > 1 else ''}{sequence}"
             for sequence, count, in self.sequences.items()
         )
 

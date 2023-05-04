@@ -57,124 +57,126 @@ def test_different_dimensions(NN, dimensions_to_extend, test_data):
     return times, mses
 
 
-if __name__ == "__main__":
-    np.random.seed(926)
-    BS = 500
-    lr = 1e-2
-    NUM_EPOCHS = 1000
+np.random.seed(926)
+BS = 1000
+lr = 8e-3
+NUM_EPOCHS = 1000
 
-    SS = PermutationSequence()
-    TT = TrivialSequence(SS.group_sequence())
-    V2 = SS * SS
-    # inner = V2 + V2 + V2 + SS + SS + SS
-    inner = V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS
-    # inner = (
-    # V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS
-    # )  # Two inner layers of this are good for l1 trace
-    # inner = V2 + V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS + SS + SS
+SS = PermutationSequence()
+TT = TrivialSequence(SS.group_sequence())
+V2 = SS * SS
+# inner = V2 + V2 + V2 + SS + SS + SS
+inner = 5*V2 + 3*SS
+# inner = (V2 + SS) * SS
+# inner = (
+# V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS
+# )  # Two inner layers of this are good for l1 trace
+# inner = V2 + V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS + SS + SS
 
-    dimensions_to_extend = range(2, 11)
-    interdimensional_test = []
-    for i in dimensions_to_extend:
-        ext_test_data = []
-        for _ in range(100):
-            x = random_sample(i)
-            ext_test_data.append((x, to_evaluate(x)))
-        interdimensional_test.append(ext_test_data)
+dimensions_to_extend = range(2, 15)
+interdimensional_test = []
+for i in dimensions_to_extend:
+    ext_test_data = []
+    for _ in range(100):
+        x = random_sample(i)
+        ext_test_data.append((x, to_evaluate(x)))
+    interdimensional_test.append(ext_test_data)
 
-    d = 6
-    train_dataset = []
-    test_dataset = []
-    N = 2000
-    for j in range(N):
-        x = random_sample(d)
-        y = to_evaluate(x)
-        train_dataset.append((x.reshape((d**2,)), y))
+d = 6
+num_inner_layers = 4
+train_dataset = []
+test_dataset = []
+N = 3000
+Nt = 1000
+for j in range(N):
+    x = random_sample(d)
+    y = to_evaluate(x)
+    train_dataset.append((x.reshape((d**2,)), y))
 
-    for j in range(N):
-        x = random_sample(d)
-        y = to_evaluate(x)
-        test_dataset.append((x.reshape((d**2,)), y))
+for j in range(Nt):
+    x = random_sample(d)
+    y = to_evaluate(x)
+    test_dataset.append((x.reshape((d**2,)), y))
 
-    def train_model(compatible):
-        NN = EMLPSequence(
-            V2, TT, 2 * [inner], is_compatible=compatible, use_bilinear=False
-        )  # Rep in  # Rep out  # Hidden layers
-        model = NN.emlp_at_level(d)
+def train_model(compatible):
+    NN = EMLPSequence(
+        V2, TT, num_inner_layers * [inner], is_compatible=compatible, use_bilinear=True
+    )  # Rep in  # Rep out  # Hidden layers
+    model = NN.emlp_at_level(d)
 
-        opt = objax.optimizer.Adam(model.vars())
+    opt = objax.optimizer.Adam(model.vars())
 
-        @objax.Jit
-        @objax.Function.with_vars(model.vars())
-        def loss(x, y):
-            yhat = model(x)
-            return mean_squared_error(yhat.reshape(y.shape), y, None)
+    @objax.Jit
+    @objax.Function.with_vars(model.vars())
+    def loss(x, y):
+        yhat = model(x)
+        return mean_squared_error(yhat.reshape(y.shape), y, None)
 
-        grad_and_val = objax.GradValues(loss, model.vars())
+    grad_and_val = objax.GradValues(loss, model.vars())
 
-        @objax.Jit
-        @objax.Function.with_vars(model.vars() + opt.vars())
-        def train_op(x, y, lr):
-            g, v = grad_and_val(x, y)
-            opt(lr=lr, grads=g)
-            return v, g
+    @objax.Jit
+    @objax.Function.with_vars(model.vars() + opt.vars())
+    def train_op(x, y, lr):
+        g, v = grad_and_val(x, y)
+        opt(lr=lr, grads=g)
+        return v, g
 
-        trainloader = DataLoader(train_dataset, batch_size=BS, shuffle=True)
-        testloader = DataLoader(test_dataset, batch_size=BS, shuffle=True)
-        print("Generated the data")
+    trainloader = DataLoader(train_dataset, batch_size=BS, shuffle=True)
+    testloader = DataLoader(test_dataset, batch_size=BS, shuffle=True)
+    print("Generated the data")
 
-        test_losses = []
-        train_losses = []
-        gradients = []
-        gra_n = []
-        for epoch in tqdm(range(NUM_EPOCHS)):
-            losses = []
-            gradient_norms = []
-            for x, y in trainloader:
-                v, g = train_op(jnp.array(x), jnp.array(y), lr)
-                losses.append(v)
-                gradients.append(g)
-                # print(g))
-            train_losses.append(np.mean(losses))
-            gra_n.append(np.mean(gradient_norms))
-            if not epoch % 10:
-                test_losses.append(
-                    np.mean([loss(jnp.array(x), jnp.array(y)) for (x, y) in testloader])
-                )
-                print(
-                    f"Epoch {epoch} Train loss {train_losses[-1]} Test loss {test_losses[-1]} Grad norm {gra_n[-1]}"
-                )
+    test_losses = []
+    train_losses = []
+    gradients = []
+    gra_n = []
+    for epoch in tqdm(range(NUM_EPOCHS)):
+        losses = []
+        gradient_norms = []
+        for x, y in trainloader:
+            v, g = train_op(jnp.array(x), jnp.array(y), lr)
+            losses.append(v)
+            gradients.append(g)
+            # print(g))
+        train_losses.append(np.mean(losses))
+        gra_n.append(np.mean(gradient_norms))
+        if not epoch % 10:
+            test_losses.append(
+                np.mean([loss(jnp.array(x), jnp.array(y)) for (x, y) in testloader])
+            )
+            print(
+                f"Epoch {epoch} Train loss {train_losses[-1]} Test loss {test_losses[-1]} Grad norm {gra_n[-1]}"
+            )
 
-        NN.set_trained_emlp_at_level(model)
-        return model, NN, train_losses, test_losses
+    NN.set_trained_emlp_at_level(model)
+    return model, NN, train_losses, test_losses
 
-    model_comp, NN_comp, train_losses_comp, test_losses_comp = train_model(True)
-    times_comp, mses_comp = test_different_dimensions(
-        NN_comp, dimensions_to_extend, interdimensional_test
-    )
+model_comp, NN_comp, train_losses_comp, test_losses_comp = train_model(True)
+times_comp, mses_comp = test_different_dimensions(
+    NN_comp, dimensions_to_extend, interdimensional_test
+)
 
-    model_free, NN_free, train_losses_free, test_losses_free = train_model(False)
-    times_free, mses_free = test_different_dimensions(
-        NN_free, dimensions_to_extend, interdimensional_test
-    )
+model_free, NN_free, train_losses_free, test_losses_free = train_model(False)
+times_free, mses_free = test_different_dimensions(
+    NN_free, dimensions_to_extend, interdimensional_test
+)
 
-    plt.style.context(["science", "vibrant"])
-    fig, ax = plt.subplots()
-    ax.plot(dimensions_to_extend, mses_free, label="Free NN", linestyle="dashed")
-    ax.plot(dimensions_to_extend, mses_comp, label="Compatible NN")
-    plt.yscale("log")
-    ppar = dict(xlabel=r"Dimension $d$", ylabel=r"Mean squared error")
-    ax.legend()
-    ax.set(**ppar)
-    plt.savefig("Interdimensional.pdf")
+plt.style.context(["science", "vibrant"])
+fig, ax = plt.subplots()
+ax.plot(dimensions_to_extend, mses_free, label="Free NN", linestyle="dashed")
+ax.plot(dimensions_to_extend, mses_comp, label="Compatible NN")
+plt.yscale("log")
+ppar = dict(xlabel=r"Dimension $d$", ylabel=r"Mean squared error")
+ax.legend()
+ax.set(**ppar)
+plt.savefig("Interdimensional.pdf")
 
-    state = dict(
-        times_comp=times_comp,
-        times_free=times_free,
-        mses_comp=mses_comp,
-        mses_free=mses_free,
-    )
-    pickle.dump(state, open("state.p", "wb"))
+state = dict(
+    times_comp=times_comp,
+    times_free=times_free,
+    mses_comp=mses_comp,
+    mses_free=mses_free,
+)
+pickle.dump(state, open("state.p", "wb"))
 
     # import matplotlib.pyplot as plt
 
