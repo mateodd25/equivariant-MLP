@@ -10,6 +10,7 @@ import gc
 import pickle
 from emlp.reps import (
     PermutationSequence,
+    OrthogonalSequence,
     TrivialSequence,
     EquivariantOperatorSequence,
     null_space,
@@ -63,17 +64,18 @@ lr = 8e-3
 NUM_EPOCHS = 1000
 
 SS = PermutationSequence()
+# SS = OrthogonalSequence()
 TT = TrivialSequence(SS.group_sequence())
 V2 = SS * SS
 # inner = V2 + V2 + V2 + SS + SS + SS
-inner = 5*V2 + 3*SS
+inner = SS + 2* (V2 * SS) 
 # inner = (V2 + SS) * SS
 # inner = (
 # V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS
 # )  # Two inner layers of this are good for l1 trace
 # inner = V2 + V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS + SS + SS
 
-dimensions_to_extend = range(2, 15)
+dimensions_to_extend = range(2, 8)
 interdimensional_test = []
 for i in dimensions_to_extend:
     ext_test_data = []
@@ -83,7 +85,7 @@ for i in dimensions_to_extend:
     interdimensional_test.append(ext_test_data)
 
 d = 6
-num_inner_layers = 4
+num_inner_layers = 1
 train_dataset = []
 test_dataset = []
 N = 3000
@@ -100,7 +102,7 @@ for j in range(Nt):
 
 def train_model(compatible):
     NN = EMLPSequence(
-        V2, TT, num_inner_layers * [inner], is_compatible=compatible, use_bilinear=True
+        V2, TT, num_inner_layers * [inner], is_compatible=compatible, use_bilinear=True, use_gates=False
     )  # Rep in  # Rep out  # Hidden layers
     model = NN.emlp_at_level(d)
 

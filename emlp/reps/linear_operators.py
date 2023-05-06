@@ -54,7 +54,9 @@ class LazyKron(LinearOperator):
         shape = product([Mi.shape[0] for Mi in Ms]), product([Mi.shape[1] for Mi in Ms])
         # self.dtype=Ms[0].dtype
         super().__init__(None, shape)
-        self.is_sparse = np.array([M.is_sparse for M in Ms]).all()
+        # TODO Fix sparisty 
+        # self.is_sparse = np.array([M.is_sparse for M in Ms]).all()
+        self.is_sparse = False
 
     def _matvec(self, v):
         return self._matmat(v).reshape(-1)
