@@ -12,6 +12,7 @@ from .utils import null_space
 from functools import reduce
 from collections import defaultdict
 
+
 @export
 class ConsistentSequence(object):
     r"""Consistent sequence of representations."""
@@ -79,12 +80,12 @@ class ConsistentSequence(object):
             if other == 0:
                 return self
             else:
-                return other * TrivialSequence(
-                    group_sequence=self.group_sequence()
-                ) + self
+                return (
+                    other * TrivialSequence(group_sequence=self.group_sequence()) + self
+                )
 
         return SumSequence(self, other)
-    
+
     def __mul__(self, other):
         return mul_sequences(self, other)
 
@@ -109,30 +110,37 @@ class ConsistentSequence(object):
         return EquivariantOperatorSequence(other, self)
 
     def __lt__(self, other):
-        if isinstance(other, TrivialSequence): 
-            return False 
+        if isinstance(other, TrivialSequence):
+            return False
         elif isinstance(self, TrivialSequence):
             return True
-        try: 
+        try:
             if self.group_sequence() < other.group_sequence():
                 return True
             elif self.group_sequence() > other.group_sequence():
                 return False
         except:
-            pass 
+            pass
         return hash(self) < hash(other)
-        
-@export 
-class GatedSequence(ConsistentSequence): 
+
+    def __eq__(self, other):
+        return type(self) == type(other) and type(self.group_sequence()) == type(
+            other.group_sequence()
+        )
+
+
+@export
+class GatedSequence(ConsistentSequence):
     """A Gated Sequence.
 
-    Gated sequences contain additional trivial sequences for each irreducible 
+    Gated sequences contain additional trivial sequences for each irreducible
     that is not a permutation-like, i.e., representations that do not accept
-    component-wise activation function. 
+    component-wise activation function.
     """
+
     def __init__(self, input: ConsistentSequence):
         self._original_sequence = input
-        self.generation_degree = input.generation_degree 
+        self.generation_degree = input.generation_degree
         self.presentation_degree = input.presentation_degree
 
         if isinstance(input, SumSequence):
@@ -141,13 +149,18 @@ class GatedSequence(ConsistentSequence):
                 [
                     TrivialSequence(input.group_sequence())
                     for sequence in input
-                    if not isinstance(sequence, TrivialSequence) and not sequence.is_permutation
+                    if not isinstance(sequence, TrivialSequence)
+                    and not sequence.is_permutation
                 ]
             )
         else:
             print("It is not an instance")
-            self._gated_sequence = input + TrivialSequence(input.group_sequence()) if not input.is_permutation else input
-        
+            self._gated_sequence = (
+                input + TrivialSequence(input.group_sequence())
+                if not input.is_permutation
+                else input
+            )
+
     def group_sequence(self):
         return self._original_sequence.group_sequence()
 
@@ -163,7 +176,7 @@ class GatedSequence(ConsistentSequence):
     def extendability_constraints(self, n, n0):
         return self._gated_sequence.extendability_constraints(n, n0)
 
-    
+
 # --------------------------------------------------------------------------------
 # Operations
 # --------------------------------------------------------------------------------
@@ -176,40 +189,48 @@ class GatedSequence(ConsistentSequence):
 class SumSequence(ConsistentSequence):
     """Sum sequence between two sequences"""
 
-
     def __init__(self, *sequences):
         """Constructs a sum sequence from a list of sequences."""
         sequences = [
-            SumSequenceFromCollection({TrivialSequence: seq}) if isinstance(seq, int) else seq 
+            SumSequenceFromCollection({TrivialSequence: seq})
+            if isinstance(seq, int)
+            else seq
             for seq in sequences
         ]
         seq_counters = [
-            seq.sequences if isinstance(seq, SumSequence) else {seq: 1} for seq in sequences 
+            seq.sequences if isinstance(seq, SumSequence) else {seq: 1}
+            for seq in sequences
         ]
         self.sequences = self._compute_canonical(seq_counters)
-        self.generation_degree = reduce(max, [seq.generation_degree for seq in self.sequences.keys()])       
-        self.presentation_degree = reduce(max, [seq.presentation_degree for seq in self.sequences.keys()])       
+        self.generation_degree = reduce(
+            max, [seq.generation_degree for seq in self.sequences.keys()]
+        )
+        self.presentation_degree = reduce(
+            max, [seq.presentation_degree for seq in self.sequences.keys()]
+        )
         self._group_sequence = next(iter(self.sequences)).group_sequence()
         self.is_permutation = all([seq.is_permutation for seq in self.sequences.keys()])
+        # import pdb; pdb.set_trace()
         # self._num_summands = sum([ for ])
-        
+
     def _compute_canonical(self, seq_counters):
-        unique_seq = sorted(reduce(lambda a, b: a | b, [seq.keys() for seq in seq_counters]))
+        unique_seq = sorted(
+            reduce(lambda a, b: a | b, [seq.keys() for seq in seq_counters])
+        )
         merged_counts = defaultdict(int)
-        ids = [0] * len(seq_counters)
-        for pair in seq_counters:
-            seq = next(iter(pair.keys()))
-            counter = pair[seq]
-            merged_counts[seq] += counter 
+        for seq in unique_seq:
+            for cs in seq_counters:
+                if seq in cs:
+                    merged_counts[seq] += cs[seq]
         return merged_counts
-            
+
     def num_sumands(self):
         pass
         # return len(sel)
 
     def __hash__(self):
-        return hash(tuple(self.reps.items()))
-        
+        return hash(tuple(self.sequences.items()))
+
     # def __init__(self, first_sequence, second_sequence):
     #     """Initialize with the two summands."""
     #     self.first_sequence = first_sequence
@@ -232,9 +253,9 @@ class SumSequence(ConsistentSequence):
     #     return rep
 
     # def up_embedding(self, j):
-        # return LazyDirectSum(
-        #     [self.first_sequence.up_embedding(j), self.second_sequence.up_embedding(j)]
-        # )
+    # return LazyDirectSum(
+    #     [self.first_sequence.up_embedding(j), self.second_sequence.up_embedding(j)]
+    # )
 
     def representation(self, j):
         reps = [count * seq.representation(j) for seq, count in self.sequences.items()]
@@ -255,19 +276,22 @@ class SumSequence(ConsistentSequence):
             f"{count if count > 1 else ''}{repr(sequence)}"
             for sequence, count, in self.sequences.items()
         )
-    
+
     def __str__(self):
         return "+".join(
             f"{count if count > 1 else ''}{sequence}"
             for sequence, count, in self.sequences.items()
         )
-    
+
     def __iter__(self):
         return (seq for seq, counter in self.sequences.items() for _ in range(counter))
 
     def __len__(self):
-        return sum(multiplicity for multiplicity in self.sequences.value())
-    
+        return sum(multiplicity for multiplicity in self.sequences.values())
+
+    def __eq__(self, other):
+        return isinstance(other, SumSequence) and self.sequences == other.sequences
+
 
 class SumSequenceFromCollection(SumSequence):
     def __init__(self, counter, perm=None):
@@ -276,7 +300,8 @@ class SumSequenceFromCollection(SumSequence):
         self.sequences, self.perm = self._compute_canonical([counter], [self.perm])
         self.invperm = np.argsort(self.perm)
         self.is_permutation = all(rep.is_permutation for rep in self.sequences.keys())
-    
+
+
 class ProductSequence(ConsistentSequence):
     """Product sequence between two sequences."""
 
@@ -293,7 +318,9 @@ class ProductSequence(ConsistentSequence):
         self.generation_degree = (
             first_sequence.generation_degree + second_sequence.generation_degree
         )
-        self.is_permutation = first_sequence.is_permutation and second_sequence.is_permutation
+        self.is_permutation = (
+            first_sequence.is_permutation and second_sequence.is_permutation
+        )
 
     def representation(self, j):
         r"""Tensor product representation"""
@@ -306,6 +333,16 @@ class ProductSequence(ConsistentSequence):
         return LazyKron(
             # [self.first_sequence.up_embedding(j), self.second_sequence.up_embedding(j)]
             [self.second_sequence.up_embedding(j), self.first_sequence.up_embedding(j)]
+        )
+
+    def __hash__(self):
+        return hash((self.first_sequence, self.second_sequence))
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, ProductSequence)
+            and self.first_sequence == other.first_sequence
+            and self.second_sequence == other.second_sequence
         )
 
 
@@ -441,7 +478,7 @@ class EquivariantOperators(object):
 
 
 # --------------------------------------------------------------------------------
-# Consistent sequence implementations 
+# Consistent sequence implementations
 # --------------------------------------------------------------------------------
 @export
 class TrivialSequence(ConsistentSequence):
@@ -471,12 +508,11 @@ class TrivialSequence(ConsistentSequence):
         """Identity embedding."""
         return lazify(np.eye(1))
 
-    def __eq__(self, other): 
+    def __eq__(self, other):
         return isinstance(other, TrivialSequence)
 
     def __hash__(self):
         return 0
-
 
 
 @export
