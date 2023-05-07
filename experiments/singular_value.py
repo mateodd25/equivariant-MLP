@@ -51,14 +51,25 @@ def test_different_dimensions(NN, dimensions_to_extend, test_data):
         t1 = time()
         model = NN.emlp_at_level(i, trained=True)
         times.append(time() - t1)
+        # import pdb
+
+        # pdb.set_trace()
         mses.append(
             [
                 jnp.mean(
-                    1
-                    - jnp.sum(model(x.reshape(-1)) * y, 0) ** 2
-                    * (1 / _norm_columns(model(x)) * (1 / _norm_columns(y)))
+                    np.array(
+                        [
+                            1
+                            - jnp.sum(model(x.reshape(-1)) * y, 0) ** 2
+                            * (
+                                1
+                                / _norm_columns(model(x.reshape(-1)))
+                                * (1 / _norm_columns(y))
+                            )
+                            for x, y in ext_test_data
+                        ]
+                    )
                 )
-                for x, y in ext_test_data
             ]
         )
         print(f"Level {i} time to extend {times[-1]} with MSE {mses[-1]}")
@@ -69,16 +80,17 @@ def test_different_dimensions(NN, dimensions_to_extend, test_data):
 
 # if __name__ == "__main__":
 np.random.seed(926)
-BS = 500
-lr = 1e-2
+BS = 600
+lr = 5e-2
 NUM_EPOCHS = 1000
 
 
-OO = OrthogonalSequence()
+OO = PermutationSequence()
+# OO = OrthogonalSequence()
 TT = TrivialSequence(OO.group_sequence())
 V2 = OO * OO
-inner = (V2 + OO + TT) * (V2 + OO + TT)
-num_inner_layers = 1
+inner = TT + OO + V2 + V2 * OO
+num_inner_layers = 2
 
 
 # inner = V2 * SS
@@ -147,6 +159,7 @@ def train_model(compatible):
     train_losses = []
     gradients = []
     gra_n = []
+
     for epoch in tqdm(range(NUM_EPOCHS)):
         losses = []
         gradient_norms = []

@@ -121,6 +121,13 @@ class ConsistentSequence(object):
                 return False
         except:
             pass
+        # We compare the representation at level 2 since level 1 is often trivial.
+        my_rep = self.representation(2)
+        other_rep = other.representation(2)
+        if my_rep.size() < other_rep.size():
+            return True
+        elif my_rep.size() > other_rep.size():
+            return False
         return hash(self) < hash(other)
 
     def __eq__(self, other):
