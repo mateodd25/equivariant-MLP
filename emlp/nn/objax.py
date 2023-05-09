@@ -72,6 +72,9 @@ class BiLinear(Module):
         # compatible with non sumreps? need to check
         W = self.weight_proj(self.w.value, x)
         out = 0.1 * (W @ x[..., None])[..., 0]
+        import pdb
+
+        pdb.set_trace()
         return out
 
 
@@ -105,7 +108,6 @@ class GatedNonlinearity(Module):
     def __call__(self, values):
         indices = gate_indices(self.rep)
         # import pdb
-
         # pdb.set_trace()
         gate_scalars = values[..., indices]
         activations = jax.nn.sigmoid(gate_scalars) * values[..., : self.rep.size()]
@@ -721,6 +723,9 @@ class EMLP(Module, metaclass=Named):
         )
 
     def __call__(self, x, training=True):
+        return self.network(x)
+
+    def predict(self, x):
         return self.network(x)
 
 

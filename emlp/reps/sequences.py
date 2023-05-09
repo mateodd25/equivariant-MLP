@@ -151,7 +151,7 @@ class GatedSequence(ConsistentSequence):
         self.presentation_degree = input.presentation_degree
 
         if isinstance(input, SumSequence):
-            print("It is an instance")
+            # print("It is an instance")
             self._gated_sequence = input + sum(
                 [
                     TrivialSequence(input.group_sequence())
@@ -161,7 +161,7 @@ class GatedSequence(ConsistentSequence):
                 ]
             )
         else:
-            print("It is not an instance")
+            # print("It is not an instance")
             self._gated_sequence = (
                 input + TrivialSequence(input.group_sequence())
                 if not input.is_permutation

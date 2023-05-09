@@ -79,4 +79,7 @@ if __name__ == "__main__":
         makeTrainer.__kwdefaults__, namespace=(emlp.groups, emlp.datasets, emlp.nn)
     )
     trainer = makeTrainer(**cfg)
+    # import pdb
+
+    # pdb.set_trace()
     trainer.train(cfg["num_epochs"])

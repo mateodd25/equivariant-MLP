@@ -22,6 +22,31 @@ from emlp.groups import S
 from objax.functional.loss import mean_squared_error
 import matplotlib.pyplot as plt
 import scienceplots
+from functools import partial
+from itertools import islice
+from jax import vmap
+
+
+def scale_adjusted_rel_err(a, b, g):
+    return jnp.sqrt(((a - b) ** 2).mean()) / (
+        jnp.sqrt((a**2).mean())
+        + jnp.sqrt((b**2).mean())
+        + jnp.abs(g - jnp.eye(g.shape[-1])).mean()
+    )
+
+
+def equivariance_err(model, x, y, group=None):
+    try:
+        model = model.model
+    except:
+        pass
+    group = model.G if group is None else group
+    gs = group.samples(x.shape[0])
+    rho_gin = vmap(model.rep_in.rho_dense)(gs)
+    rho_gout = vmap(model.rep_out.rho_dense)(gs)
+    y1 = model((rho_gin @ x[..., None])[..., 0])
+    y2 = (rho_gout @ model(x)[..., None])[..., 0]
+    return np.asarray(scale_adjusted_rel_err(y1, y2, gs))
 
 
 def random_sample(size):
@@ -37,6 +62,7 @@ def test_different_dimensions(NN, dimensions_to_extend, test_data):
     # models = []
     times = []
     mses = []
+    equi_error = []
     j = 0
     for i in dimensions_to_extend:
         ext_test_data = test_data[j]
@@ -52,7 +78,14 @@ def test_different_dimensions(NN, dimensions_to_extend, test_data):
                 ]
             )
         )
-        print(f"Level {i} time to extend {times[-1]} with MSE {mses[-1]}")
+        equi_error.append(
+            np.mean(
+                [equivariance_err(model, x.reshape(-1), y) for x, y in ext_test_data]
+            )
+        )
+        print(
+            f"Level {i} time to extend {times[-1]} with MSE {mses[-1]} with Equi error {equi_error[-1]}"
+        )
         del model
         gc.collect()
     return times, mses
@@ -67,7 +100,7 @@ if __name__ == "__main__":
     SS = PermutationSequence()
     V2 = SS * SS
     seq_in = V2
-    inner = V2 + V2 + V2 + V2 + SS + SS + SS + SS
+    inner = 8 * V2
     seq_out = V2
 
     dimensions_to_extend = range(2, 11)
@@ -139,7 +172,7 @@ if __name__ == "__main__":
                     np.mean([loss(jnp.array(x), jnp.array(y)) for (x, y) in testloader])
                 )
                 print(
-                    f"Epoch {epoch} Train loss {train_losses[-1]} Test loss {train_losses[-1]} Grad norm {gra_n[-1]}"
+                    f"Epoch {epoch} Train loss {train_losses[-1]} Test loss {test_losses[-1]} Equi error {equivariance_err(model, jnp.array(x), jnp.array(y))}"
                 )
 
         NN.set_trained_emlp_at_level(model)

@@ -27,10 +27,14 @@ def scale_adjusted_rel_err(a, b, g):
 
 def equivariance_err(model, mb, group=None):
     x, y = mb
-    group = model.model.G if group is None else group
+    try:
+        model = model.model
+    except:
+        pass
+    group = model.G if group is None else group
     gs = group.samples(x.shape[0])
-    rho_gin = vmap(model.model.rep_in.rho_dense)(gs)
-    rho_gout = vmap(model.model.rep_out.rho_dense)(gs)
+    rho_gin = vmap(model.rep_in.rho_dense)(gs)
+    rho_gout = vmap(model.rep_out.rho_dense)(gs)
     y1 = model.predict((rho_gin @ x[..., None])[..., 0])
     y2 = (rho_gout @ model.predict(x)[..., None])[..., 0]
     return np.asarray(scale_adjusted_rel_err(y1, y2, gs))
@@ -56,7 +60,7 @@ class RegressorPlus(Regressor):
         """Standard cross-entropy loss"""
         x, y = minibatch
         mse = jnp.mean(
-            (self.model(x, training=True).reshape(y.shape) - y) ** 2
+            (self.model(x, training=True) - y) ** 2
         )  # jnp.mean(jnp.abs(self.model(x,training=True)-y))
         return mse
 

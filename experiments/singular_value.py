@@ -99,7 +99,7 @@ num_inner_layers = 2
 # )  # Two inner layers of this are good for l1 trace
 # inner = V2 + V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS + SS + SS
 
-dimensions_to_extend = range(2, 11)
+dimensions_to_extend = range(2, 9)
 interdimensional_test = []
 for i in dimensions_to_extend:
     ext_test_data = []
@@ -108,7 +108,7 @@ for i in dimensions_to_extend:
         ext_test_data.append((x, to_evaluate(x)))
     interdimensional_test.append(ext_test_data)
 
-d = 4
+d = 6
 train_dataset = []
 test_dataset = []
 N = 3000
@@ -182,15 +182,15 @@ def train_model(compatible):
     return model, NN, train_losses, test_losses
 
 
-model_free, NN_free, train_losses_free, test_losses_free = train_model(False)
-times_free, mses_free = test_different_dimensions(
-    NN_free, dimensions_to_extend, interdimensional_test
-)
-
-
 model_comp, NN_comp, train_losses_comp, test_losses_comp = train_model(True)
 times_comp, mses_comp = test_different_dimensions(
     NN_comp, dimensions_to_extend, interdimensional_test
+)
+
+
+model_free, NN_free, train_losses_free, test_losses_free = train_model(False)
+times_free, mses_free = test_different_dimensions(
+    NN_free, dimensions_to_extend, interdimensional_test
 )
 
 
