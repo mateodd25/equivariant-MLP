@@ -81,7 +81,7 @@ def test_different_dimensions(NN, dimensions_to_extend, test_data):
 
 
 np.random.seed(926)
-BS = 1000
+BS = 500
 lr = 8e-3
 NUM_EPOCHS = 1000
 
@@ -90,7 +90,7 @@ SS = OrthogonalSequence()
 TT = TrivialSequence(SS.group_sequence())
 V2 = SS * SS
 # inner = V2 + V2 + V2 + SS + SS + SS
-inner = 4 * SS + 4 * V2
+inner = 10 * TT + 10 * SS + 4 * V2 + 2 * (V2 * SS)
 # inner = (V2 + SS) * SS
 # inner = (
 # V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS
@@ -122,7 +122,7 @@ for j in range(Nt):
     x = random_sample(d)
     y = to_evaluate(x)
     # test_dataset.append((x.reshape((d**2,)), y))
-    train_dataset.append((x, y))
+    test_dataset.append((x, y))
 
 
 def train_model(compatible):
@@ -164,9 +164,9 @@ def train_model(compatible):
     for epoch in tqdm(range(NUM_EPOCHS)):
         losses = []
         gradient_norms = []
-        import pdb
+        # import pdb
 
-        pdb.set_trace()
+        # pdb.set_trace()
         for x, y in trainloader:
             v, g = train_op(jnp.array(x), jnp.array(y), lr)
             losses.append(v)

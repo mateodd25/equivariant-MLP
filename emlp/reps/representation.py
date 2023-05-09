@@ -585,6 +585,10 @@ def bilinear_weights(out_rep, in_rep):
         for rep, ids in x_rep.as_dict(np.arange(x_rep.size())).items()
     }
 
+    # import pdb
+
+    # pdb.set_trace()
+
     # Apply the projections for each rank, concatenate, and permute back to orig rank order
     @jit
     def lazy_projection(
@@ -610,7 +614,11 @@ def bilinear_weights(out_rep, in_rep):
             )
             bilinear_elems = bilinear_elems.reshape(W_mult * rep.size(), bs).T
             Ws.append(bilinear_elems)
+            # import pdb
+
+            # pdb.set_trace()
         Ws = jnp.concatenate(Ws, axis=-1)  # concatenate over rep axis
+
         return Ws[..., inv_perm].reshape(
             *bshape, *mat_shape
         )  # reorder to original rank ordering

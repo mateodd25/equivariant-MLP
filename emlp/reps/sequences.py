@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 
 #!/usr/bin/env python3
+import jax.numpy as jnp
+from jax import jit
+from emlp.reps import Scalar
 import numpy as np
 from emlp.utils import export
 from plum import dispatch
@@ -183,17 +186,24 @@ class GatedSequence(ConsistentSequence):
     def extendability_constraints(self, n, n0):
         return self._gated_sequence.extendability_constraints(n, n0)
 
+
+@export
 def bilinear_aux(rep_in, rep_out):
     """Outputs a function that takes as input element x in rep_in and returns a mapping rep_in -> rep_out."""
     W_rep, W_perm = (rep_in >> rep_out).canonicalize()
     inv_perm = np.argsort(W_perm)
-    mat_shape = rep_out.size(), rep_out.size()
+    mat_shape = rep_out.size(), rep_in.size()
+    x_rep = rep_in if isinstance(rep_in, SumRep) else SumRep(rep_in)
     W_multiplicities = W_rep.reps
-    in_multiplicities = rep_in.reps
-    in_multiplicities = {rep: n for rep, n in in__multiplicities if rep != Scalar}
-    nelems = lambda = nx, rep: min(nx, rep.size())
+    x_multiplicities = x_rep.reps
+    x_multiplicities = {rep: n for rep, n in x_multiplicities.items() if rep != Scalar}
+    nelems = lambda nx, rep: min(nx, rep.size())
+    # import pdb
+
+    # pdb.set_trace()
+
     reduced_indices_dict = {
-        rep: ids[0:nelems(len(ids), rep)].reshape[-1]
+        rep: ids[np.arange(nelems(len(ids), rep))].reshape(-1)
         for rep, ids in x_rep.as_dict(np.arange(x_rep.size())).items()
     }
 
@@ -212,7 +222,7 @@ def bilinear_aux(rep_in, rep_out):
             n = nelems(x_mult, rep)
             i_end = i + W_mult * n
             bids = reduced_indices_dict[rep]
-            bilinear_params = np.ones(W_mult, n)  # bs,nK-> (nK,bs)
+            bilinear_params = jnp.ones((W_mult, n))  # bs,nK-> (nK,bs)
             i = i_end  # (bs,W_mult,d^r) = (W_mult,n)@(n,d^r,bs)
             bilinear_elems = bilinear_params @ x[..., bids].T.reshape(
                 n, rep.size() * bs
@@ -226,7 +236,7 @@ def bilinear_aux(rep_in, rep_out):
 
     return lazy_projection
 
-    
+
 # --------------------------------------------------------------------------------
 # Operations
 # --------------------------------------------------------------------------------
@@ -276,6 +286,7 @@ class SumSequence(ConsistentSequence):
 
     def num_sumands(self):
         pass
+
     # return len(sel)
 
     def __hash__(self):

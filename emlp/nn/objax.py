@@ -4,7 +4,12 @@ import objax.nn as nn
 import objax.functional as F
 import numpy as np
 from emlp.reps import T, Rep, Scalar
-from emlp.reps import EquivariantOperatorSequence, EquivariantOperators, GatedSequence, bilinear_aux
+from emlp.reps import (
+    EquivariantOperatorSequence,
+    EquivariantOperators,
+    GatedSequence,
+    bilinear_aux,
+)
 from emlp.reps import bilinear_weights
 from emlp.reps.product_sum_reps import SumRep
 import collections
@@ -332,7 +337,7 @@ class ExtendableBilinear(Module):
             ),
         )
 
-        self.aux_mapping = jit(bilinear_aux(repout, repin))
+        self.aux_mapping = jit(bilinear_aux(rep_out, rep_out))
         # self.linear_one = ExtendableLinear(
         #     rep_in,
         #     rep_out,
@@ -353,8 +358,9 @@ class ExtendableBilinear(Module):
         # )
 
     def __call__(self, x):
-        W = self.aux_mapping(x)
-        return (W @ x[..., None])[..., 0]
+        lin = self.linear(x)
+        W = self.aux_mapping(lin)
+        return (W @ lin[..., None])[..., 0]
 
 
 @export
