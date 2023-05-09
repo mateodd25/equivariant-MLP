@@ -104,14 +104,14 @@ def test_different_dimensions(NN, dimensions_to_extend, test_data):
 if __name__ == "__main__":
     np.random.seed(926)
     BS = 500
-    lr = 5e-3
+    lr = 9e-3
     NUM_EPOCHS = 1000
 
     T1 = OrthogonalSequence()
     T0 = TrivialSequence(T1.group_sequence())
     T2 = T1 * T1
     seq_in = T1 + T1
-    inner = 10 * T0 + 5 * T1 + 4 * T2 + 3 * (T2 * T1)
+    inner = 10 * T0 + 3 * T1 + 2 * T2 + 1 * (T2 * T1)
     seq_out = T0
 
     dimensions_to_extend = range(2, 11)
@@ -123,7 +123,7 @@ if __name__ == "__main__":
             ext_test_data.append((x, to_evaluate(x)))
         interdimensional_test.append(ext_test_data)
 
-    d = 5
+    d = 3
     train_dataset = []
     test_dataset = []
     N = 3000
@@ -192,10 +192,10 @@ if __name__ == "__main__":
         NN.set_trained_emlp_at_level(model)
         return model, NN, train_losses, test_losses
 
-    # model_comp, NN_comp, train_losses_comp, test_losses_comp = train_model(True)
-    # times_comp, mses_comp = test_different_dimensions(
-    #     NN_comp, dimensions_to_extend, interdimensional_test
-    # )
+    model_comp, NN_comp, train_losses_comp, test_losses_comp = train_model(True)
+    times_comp, mses_comp = test_different_dimensions(
+        NN_comp, dimensions_to_extend, interdimensional_test
+    )
 
     model_free, NN_free, train_losses_free, test_losses_free = train_model(False)
     times_free, mses_free = test_different_dimensions(

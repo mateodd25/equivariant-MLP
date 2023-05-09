@@ -4,7 +4,7 @@ import jax
 from jax import device_put, jit
 from .linear_operator_base import LinearOperator
 import numpy as np
-import tqdm
+from tqdm.auto import tqdm
 import jax.numpy as jnp
 import optax
 from emlp.utils import export
@@ -19,7 +19,7 @@ class ConvergenceError(Exception):
 @export
 def null_space(matrix: LinearOperator):
     """Return null space of a linear operator"""
-    if matrix.shape[0] * matrix.shape[1] > 5e8:  # Too large to use SVD
+    if matrix.shape[0] * matrix.shape[1] > 5e7:  # Too large to use SVD
         result = krylov_constraint_solve(matrix)
     else:
         dense_matrix = matrix.to_dense()

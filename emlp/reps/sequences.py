@@ -206,7 +206,12 @@ def bilinear_aux(rep_in, rep_out):
         rep: ids[np.arange(nelems(len(ids)))].reshape(-1)
         for rep, ids in x_rep.as_dict(np.arange(x_rep.size())).items()
     }
-    param_dims = sum([W_multiplicities.get(rep, 0) * nelems(n) for rep, n in x_multiplicities.items()])
+    param_dims = sum(
+        [
+            W_multiplicities.get(rep, 0) * nelems(n)
+            for rep, n in x_multiplicities.items()
+        ]
+    )
 
     @jit
     def lazy_projection(params, x):
@@ -530,13 +535,22 @@ class EquivariantOperators(object):
         self.output_representation = output_representation
         self.compatibility_constraints = compatibility_constraints
 
+    solcache = {}
+
     def equivariant_basis(self):
         linear_maps = self.input_representation >> self.output_representation
-        basis = linear_maps.equivariant_basis()
-        if self.compatibility_constraints is not None:
-            coefficients = null_space(self.compatibility_constraints @ lazify(basis))
-            basis = basis @ coefficients
-        return basis
+        # if linear_maps not in self.solcache:
+        C_equiv = linear_maps.constraint_matrix()
+        C_lazy = ConcatLazy([C_equiv, self.compatibility_constraints])
+        return null_space(C_lazy)
+        # self.solcache[linear_maps] = null_space(C_lazy)
+        # return self.solcache[linear_maps]
+
+        # basis = linear_maps.equivariant_basis()
+        # if self.compatibility_constraints is not None:
+        #     coefficients = null_space(self.compatibility_constraints @ lazify(basis))
+        #     basis = basis @ coefficients
+        # return basis
 
 
 # --------------------------------------------------------------------------------

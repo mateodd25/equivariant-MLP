@@ -338,7 +338,13 @@ class ExtendableBilinear(Module):
         )
         param_dim, aux_map = bilinear_aux(rep_out, rep_out)
         self.aux_mapping = jit(aux_map)
-        self.w = TrainVar((objax.random.normal((param_dim,)) if learned_parameters is None else learned_parameters[1]))
+        self.w = TrainVar(
+            (
+                objax.random.normal((param_dim,))
+                if learned_parameters is None
+                else learned_parameters[1]
+            )
+        )
 
     def __call__(self, x):
         lin = self.linear(x)
@@ -573,9 +579,9 @@ class EMLPSequence(object):
             # TODO: Make sure that the sizes here are right
             right_hand_side[(-len(w)) :] = w
             # w_at_new_level, _, _, _ = np.linalg.solve(constraints.to_dense(), right_hand_side.reshape((len(right_hand_side), 1)))
-            map = lambda x: constraints @ x
+            mapping = lambda x: constraints @ x
             w_at_new_level = linear_solve.solve_normal_cg(
-                map, right_hand_side, init=np.ones(constraints.shape[1])
+                mapping, right_hand_side, init=np.ones(constraints.shape[1])
             )
 
             if self.use_bias:
@@ -631,7 +637,7 @@ class EMLPSequence(object):
 
         return parameters
 
-    # TODO: Store a cached version of already evaluated levels, so as to not 
+    # TODO: Store a cached version of already evaluated levels, so as to not
     # repeat computations.
     def emlp_at_level(self, level, trained=False):
         if self.is_trained is False and trained is True:

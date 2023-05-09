@@ -78,26 +78,17 @@ def test_different_dimensions(NN, dimensions_to_extend, test_data):
     return times, mses
 
 
-# if __name__ == "__main__":
-np.random.seed(926)
 BS = 600
-lr = 5e-2
+lr = 1e-3
 NUM_EPOCHS = 1000
-
 
 OO = PermutationSequence()
 # OO = OrthogonalSequence()
 TT = TrivialSequence(OO.group_sequence())
 V2 = OO * OO
-inner = TT + OO + V2 + V2 * OO
+inner = 10 * TT + 6 * OO + 1 * V2
 num_inner_layers = 2
 
-
-# inner = V2 * SS
-# inner = (
-# V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS
-# )  # Two inner layers of this are good for l1 trace
-# inner = V2 + V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS + SS + SS
 
 dimensions_to_extend = range(2, 9)
 interdimensional_test = []
@@ -108,7 +99,7 @@ for i in dimensions_to_extend:
         ext_test_data.append((x, to_evaluate(x)))
     interdimensional_test.append(ext_test_data)
 
-d = 6
+d = 3
 train_dataset = []
 test_dataset = []
 N = 3000
