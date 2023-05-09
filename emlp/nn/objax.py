@@ -333,11 +333,13 @@ class ExtendableBilinear(Module):
             include_bias=use_bias,
             compatibility_constraints=compatibility_constraints,
             learned_parameters=(
-                learned_parameters if learned_parameters is not None else None
+                learned_parameters[0] if learned_parameters is not None else None
             ),
         )
-
-        self.aux_mapping = jit(bilinear_aux(rep_out, rep_out))
+        
+        param_dim, aux_map = bilinear_aux(rep_out, rep_out)
+        self.aux_mapping = jit(aux_map)
+        self.w = TrainVar((objax.random.normal((param_dim,)) if learned_parameters is None else learned_parameters[1]))
         # self.linear_one = ExtendableLinear(
         #     rep_in,
         #     rep_out,
