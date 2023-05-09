@@ -4,7 +4,7 @@ import objax.nn as nn
 import objax.functional as F
 import numpy as np
 from emlp.reps import T, Rep, Scalar
-from emlp.reps import EquivariantOperatorSequence, EquivariantOperators, GatedSequence
+from emlp.reps import EquivariantOperatorSequence, EquivariantOperators, GatedSequence, bilinear_aux
 from emlp.reps import bilinear_weights
 from emlp.reps.product_sum_reps import SumRep
 import collections
@@ -322,27 +322,39 @@ class ExtendableBilinear(Module):
         learned_parameters=None,
     ):
         super().__init__()
-        self.linear_one = ExtendableLinear(
+        self.linear = ExtendableLinear(
             rep_in,
             rep_out,
             include_bias=use_bias,
             compatibility_constraints=compatibility_constraints,
             learned_parameters=(
-                learned_parameters[0] if learned_parameters is not None else None
-            ),
-        )
-        self.linear_two = ExtendableLinear(
-            rep_in,
-            rep_out,
-            include_bias=use_bias,
-            compatibility_constraints=compatibility_constraints,
-            learned_parameters=(
-                learned_parameters[1] if learned_parameters is not None else None
+                learned_parameters if learned_parameters is not None else None
             ),
         )
 
+        self.aux_mapping = jit(bilinear_aux(repout, repin))
+        # self.linear_one = ExtendableLinear(
+        #     rep_in,
+        #     rep_out,
+        #     include_bias=use_bias,
+        #     compatibility_constraints=compatibility_constraints,
+        #     learned_parameters=(
+        #         learned_parameters[0] if learned_parameters is not None else None
+        #     ),
+        # )
+        # self.linear_two = ExtendableLinear(
+        #     rep_in,
+        #     rep_out,
+        #     include_bias=use_bias,
+        #     compatibility_constraints=compatibility_constraints,
+        #     learned_parameters=(
+        #         learned_parameters[1] if learned_parameters is not None else None
+        #     ),
+        # )
+
     def __call__(self, x):
-        return self.linear_one(x) * self.linear_two(x)
+        W = self.aux_mapping(x)
+        return (W @ x[..., None])[..., 0]
 
 
 @export
@@ -598,12 +610,17 @@ class EMLPSequence(object):
         self, level, learned_layer, seq_in, seq_out
     ):
         w_1, b_1 = self._extend_parameters_for_linear_layer(
-            level, learned_layer.linear_one, seq_in, seq_out
+            level, learned_layer.linear, seq_in, seq_out
         )
-        w_2, b_2 = self._extend_parameters_for_linear_layer(
-            level, learned_layer.linear_two, seq_in, seq_out
-        )
-        return (w_1, b_1), (w_2, b_2)
+
+        return (w_1, b_1)
+        # w_1, b_1 = self._extend_parameters_for_linear_layer(
+        #     level, learned_layer.linear_one, seq_in, seq_out
+        # )
+        # w_2, b_2 = self._extend_parameters_for_linear_layer(
+        #     level, learned_layer.linear_two, seq_in, seq_out
+        # )
+        # return (w_1, b_1), (w_2, b_2)
 
     def _extend_parameters_for_layer(self, level, learned_layer, seq_in, seq_out):
         """
