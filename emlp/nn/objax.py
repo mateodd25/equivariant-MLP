@@ -336,32 +336,13 @@ class ExtendableBilinear(Module):
                 learned_parameters[0] if learned_parameters is not None else None
             ),
         )
-        
         param_dim, aux_map = bilinear_aux(rep_out, rep_out)
         self.aux_mapping = jit(aux_map)
         self.w = TrainVar((objax.random.normal((param_dim,)) if learned_parameters is None else learned_parameters[1]))
-        # self.linear_one = ExtendableLinear(
-        #     rep_in,
-        #     rep_out,
-        #     include_bias=use_bias,
-        #     compatibility_constraints=compatibility_constraints,
-        #     learned_parameters=(
-        #         learned_parameters[0] if learned_parameters is not None else None
-        #     ),
-        # )
-        # self.linear_two = ExtendableLinear(
-        #     rep_in,
-        #     rep_out,
-        #     include_bias=use_bias,
-        #     compatibility_constraints=compatibility_constraints,
-        #     learned_parameters=(
-        #         learned_parameters[1] if learned_parameters is not None else None
-        #     ),
-        # )
 
     def __call__(self, x):
         lin = self.linear(x)
-        W = self.aux_mapping(lin)
+        W = self.aux_mapping(self.w.value, lin)
         return (W @ lin[..., None])[..., 0]
 
 
@@ -620,15 +601,8 @@ class EMLPSequence(object):
         w_1, b_1 = self._extend_parameters_for_linear_layer(
             level, learned_layer.linear, seq_in, seq_out
         )
-
-        return (w_1, b_1)
-        # w_1, b_1 = self._extend_parameters_for_linear_layer(
-        #     level, learned_layer.linear_one, seq_in, seq_out
-        # )
-        # w_2, b_2 = self._extend_parameters_for_linear_layer(
-        #     level, learned_layer.linear_two, seq_in, seq_out
-        # )
-        # return (w_1, b_1), (w_2, b_2)
+        w = learned_layer.w.value
+        return (w_1, b_1), w
 
     def _extend_parameters_for_layer(self, level, learned_layer, seq_in, seq_out):
         """
@@ -657,7 +631,8 @@ class EMLPSequence(object):
 
         return parameters
 
-    # TODO: Store a cached version of already evaluated levels, so as to not repeat computations.
+    # TODO: Store a cached version of already evaluated levels, so as to not 
+    # repeat computations.
     def emlp_at_level(self, level, trained=False):
         if self.is_trained is False and trained is True:
             raise ValueError(

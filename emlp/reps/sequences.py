@@ -197,18 +197,19 @@ def bilinear_aux(rep_in, rep_out):
     W_multiplicities = W_rep.reps
     x_multiplicities = x_rep.reps
     x_multiplicities = {rep: n for rep, n in x_multiplicities.items() if rep != Scalar}
-    nelems = lambda nx, rep: min(nx, rep.size())
+    nelems = lambda nx: min(nx, 10)
     # import pdb
 
     # pdb.set_trace()
 
     reduced_indices_dict = {
-        rep: ids[np.arange(nelems(len(ids), rep))].reshape(-1)
+        rep: ids[np.arange(nelems(len(ids)))].reshape(-1)
         for rep, ids in x_rep.as_dict(np.arange(x_rep.size())).items()
     }
+    param_dims = sum([W_multiplicities.get(rep, 0) * nelems(n) for rep, n in x_multiplicities.items()])
 
     @jit
-    def lazy_projection(x):
+    def lazy_projection(params, x):
         bshape = x.shape[:-1]
         x = x.reshape(-1, x.shape[-1])
         bs = x.shape[0]
@@ -219,10 +220,10 @@ def bilinear_aux(rep_in, rep_out):
                 Ws.append(jnp.zeros((bs, W_mult * rep.size())))
                 continue
             x_mult = x_multiplicities[rep]
-            n = nelems(x_mult, rep)
+            n = nelems(x_mult)
             i_end = i + W_mult * n
             bids = reduced_indices_dict[rep]
-            bilinear_params = jnp.ones((W_mult, n))  # bs,nK-> (nK,bs)
+            bilinear_params = params[i:i_end].reshape(W_mult, n)  # bs,nK-> (nK,bs)
             i = i_end  # (bs,W_mult,d^r) = (W_mult,n)@(n,d^r,bs)
             bilinear_elems = bilinear_params @ x[..., bids].T.reshape(
                 n, rep.size() * bs
@@ -234,7 +235,7 @@ def bilinear_aux(rep_in, rep_out):
             *bshape, *mat_shape
         )  # reorder to original rank ordering
 
-    return lazy_projection
+    return param_dims, lazy_projection
 
 
 # --------------------------------------------------------------------------------

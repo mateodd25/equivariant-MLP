@@ -56,15 +56,15 @@ def random_sample(size):
 
 
 def to_evaluate(x):
-    # d = int(len(x) / 2)
-    # x1 = x[:d]
-    # x2 = x[d:]
-    # y = (
-    #     sin(np.linalg.norm(x1))
-    #     - np.linalg.norm(x2) ** 3 / 2
-    #     + np.dot(x1, x2) / (np.linalg.norm(x1) * np.linalg.norm(x2))
-    # )
-    y = np.linalg.norm(x)
+    d = int(len(x) / 2)
+    x1 = x[:d]
+    x2 = x[d:]
+    y = (
+        sin(np.linalg.norm(x1))
+        - np.linalg.norm(x2) ** 3 / 2
+        + np.dot(x1, x2) / (np.linalg.norm(x1) * np.linalg.norm(x2))
+    )
+    # y = np.linalg.norm(x)
     return y
 
 
@@ -111,7 +111,7 @@ if __name__ == "__main__":
     T0 = TrivialSequence(T1.group_sequence())
     T2 = T1 * T1
     seq_in = T1 + T1
-    inner = 100 * T0 + 34 * T1 + 11 * T2 + 3 * (T2 * T1)
+    inner = 10 * T0 + 5 * T1 + 4 * T2 + 3 * (T2 * T1)
     seq_out = T0
 
     dimensions_to_extend = range(2, 11)
