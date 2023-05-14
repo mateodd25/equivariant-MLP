@@ -24,6 +24,29 @@ from emlp.groups import S
 from objax.functional.loss import mean_squared_error
 import matplotlib.pyplot as plt
 import scienceplots
+from jax import vmap
+
+
+def scale_adjusted_rel_err(a, b, g):
+    return jnp.sqrt(((a - b) ** 2).mean()) / (
+        jnp.sqrt((a**2).mean())
+        + jnp.sqrt((b**2).mean())
+        + jnp.abs(g - jnp.eye(g.shape[-1])).mean()
+    )
+
+
+def equivariance_err(model, x, y, group=None):
+    try:
+        model = model.model
+    except:
+        pass
+    group = model.G if group is None else group
+    gs = group.samples(x.shape[0])
+    rho_gin = vmap(model.rep_in.rho_dense)(gs)
+    rho_gout = vmap(model.rep_out.rho_dense)(gs)
+    y1 = model((rho_gin @ x[..., None])[..., 0])
+    y2 = (rho_gout @ model(x)[..., None])[..., 0]
+    return np.asarray(scale_adjusted_rel_err(y1, y2, gs))
 
 
 def random_sample(size):
@@ -44,16 +67,13 @@ def test_different_dimensions(NN, dimensions_to_extend, test_data):
     # models = []
     times = []
     mses = []
+    equi_error = []
     j = 0
     for i in dimensions_to_extend:
         ext_test_data = test_data[j]
         j += 1
         t1 = time()
         model = NN.emlp_at_level(i, trained=True)
-        times.append(time() - t1)
-        # import pdb
-
-        # pdb.set_trace()
         mses.append(
             [
                 jnp.mean(
@@ -72,7 +92,15 @@ def test_different_dimensions(NN, dimensions_to_extend, test_data):
                 )
             ]
         )
-        print(f"Level {i} time to extend {times[-1]} with MSE {mses[-1]}")
+        times.append(time() - t1)
+        equi_error.append(
+            np.mean(
+                [equivariance_err(model, x.reshape(-1), y) for x, y in ext_test_data]
+            )
+        )
+        print(
+            f"Level {i} time to extend {times[-1]} with MSE {mses[-1]} with Equi error {equi_error[-1]}"
+        )
         del model
         gc.collect()
     return times, mses
@@ -82,15 +110,16 @@ BS = 600
 lr = 1e-3
 NUM_EPOCHS = 1000
 
-OO = PermutationSequence()
+T1 = PermutationSequence()
 # OO = OrthogonalSequence()
-TT = TrivialSequence(OO.group_sequence())
-V2 = OO * OO
-inner = 10 * TT + 6 * OO + 1 * V2
-num_inner_layers = 2
+T0 = TrivialSequence(T1.group_sequence())
+T2 = T1 * T1
+# inner = 10 * T0 + 6 * T1 + 2 * T2
+inner = 4 * T0 + 4 * T1 + 2 * T2
+num_inner_layers = 3
 
 
-dimensions_to_extend = range(2, 9)
+dimensions_to_extend = range(2, 6)
 interdimensional_test = []
 for i in dimensions_to_extend:
     ext_test_data = []
@@ -99,7 +128,7 @@ for i in dimensions_to_extend:
         ext_test_data.append((x, to_evaluate(x)))
     interdimensional_test.append(ext_test_data)
 
-d = 3
+d = 4
 train_dataset = []
 test_dataset = []
 N = 3000
@@ -116,7 +145,12 @@ for j in range(100):
 
 def train_model(compatible):
     NN = EMLPSequence(
-        V2, OO, num_inner_layers * [inner], is_compatible=compatible
+        T2,
+        T1,
+        num_inner_layers * [inner],
+        is_compatible=compatible,
+        use_bilinear=False,
+        use_gates=False,
     )  # Rep in  # Rep out  # Hidden layers
     model = NN.emlp_at_level(d)
 
@@ -150,7 +184,9 @@ def train_model(compatible):
     train_losses = []
     gradients = []
     gra_n = []
+    # import pdb
 
+    # pdb.set_trace()
     for epoch in tqdm(range(NUM_EPOCHS)):
         losses = []
         gradient_norms = []
@@ -166,17 +202,11 @@ def train_model(compatible):
                 np.mean([loss(jnp.array(x), jnp.array(y)) for (x, y) in testloader])
             )
             print(
-                f"Epoch {epoch} Train loss {train_losses[-1]} Test loss {train_losses[-1]} Grad norm {gra_n[-1]}"
+                f"Epoch {epoch} Train loss {train_losses[-1]} Test loss {test_losses[-1]} Equi error {equivariance_err(model, jnp.array(x), jnp.array(y))}"
             )
 
     NN.set_trained_emlp_at_level(model)
     return model, NN, train_losses, test_losses
-
-
-model_comp, NN_comp, train_losses_comp, test_losses_comp = train_model(True)
-times_comp, mses_comp = test_different_dimensions(
-    NN_comp, dimensions_to_extend, interdimensional_test
-)
 
 
 model_free, NN_free, train_losses_free, test_losses_free = train_model(False)
@@ -184,6 +214,11 @@ times_free, mses_free = test_different_dimensions(
     NN_free, dimensions_to_extend, interdimensional_test
 )
 
+
+model_comp, NN_comp, train_losses_comp, test_losses_comp = train_model(True)
+times_comp, mses_comp = test_different_dimensions(
+    NN_comp, dimensions_to_extend, interdimensional_test
+)
 
 with plt.style.context(["science", "vibrant"]):
     fig, ax = plt.subplots()

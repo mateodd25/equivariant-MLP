@@ -535,22 +535,17 @@ class EquivariantOperators(object):
         self.output_representation = output_representation
         self.compatibility_constraints = compatibility_constraints
 
-    solcache = {}
-
     def equivariant_basis(self):
         linear_maps = self.input_representation >> self.output_representation
-        # if linear_maps not in self.solcache:
-        C_equiv = linear_maps.constraint_matrix()
-        C_lazy = ConcatLazy([C_equiv, self.compatibility_constraints])
-        return null_space(C_lazy)
-        # self.solcache[linear_maps] = null_space(C_lazy)
-        # return self.solcache[linear_maps]
+        # C_equiv = linear_maps.constraint_matrix()
+        # C_lazy = ConcatLazy([C_equiv, self.compatibility_constraints])
+        # return null_space(C_lazy)
 
-        # basis = linear_maps.equivariant_basis()
-        # if self.compatibility_constraints is not None:
-        #     coefficients = null_space(self.compatibility_constraints @ lazify(basis))
-        #     basis = basis @ coefficients
-        # return basis
+        basis = linear_maps.equivariant_basis()
+        if self.compatibility_constraints is not None:
+            coefficients = null_space(self.compatibility_constraints @ lazify(basis))
+            basis = basis @ coefficients
+        return basis
 
 
 # --------------------------------------------------------------------------------

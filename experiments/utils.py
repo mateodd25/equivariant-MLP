@@ -9,7 +9,7 @@ def generate_datasets_in_dimensions(dataset, dimensions, n=1024, seed=926):
     datasets = {}
     with FixedNumpySeed(seed), FixedPytorchSeed(seed):
         for d in dimensions:
-            datasets[d] = dataset(sample_size=n, dimension=d)
+            datasets[d] = dataset(N=n, dimension=d)
     return datasets
 
 

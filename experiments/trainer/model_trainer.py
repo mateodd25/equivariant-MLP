@@ -1,4 +1,5 @@
 import torch
+from objax.functional.loss import mean_squared_error
 import torch.nn as nn
 from oil.utils.utils import export
 import jax
@@ -59,9 +60,10 @@ class RegressorPlus(Regressor):
     def loss(self, minibatch):
         """Standard cross-entropy loss"""
         x, y = minibatch
-        mse = jnp.mean(
-            (self.model(x, training=True) - y) ** 2
-        )  # jnp.mean(jnp.abs(self.model(x,training=True)-y))
+        # mse = jnp.mean(
+        #     (self.model(x, training=True) - y) ** 2
+        # )  # jnp.mean(jnp.abs(self.model(x,training=True)-y))
+        mse = mean_squared_error(self.model(x, training=True).reshape(y.shape), y, None)
         return mse
 
     def metrics(self, loader):

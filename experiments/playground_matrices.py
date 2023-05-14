@@ -51,13 +51,13 @@ def equivariance_err(model, x, y, group=None):
 
 
 def random_sample(size):
-    return np.random.randn(size)
-    # return np.random.randn(size, size)
+    # return np.random.randn(size)
+    return np.random.randn(size, size)
 
 
 def to_evaluate(x):
-    return np.linalg.norm(x)
-    # return np.trace(np.matrix(x))
+    # return np.linalg.norm(x)
+    return np.trace(np.matrix(x))
 
 
 def test_different_dimensions(NN, dimensions_to_extend, test_data):
@@ -89,8 +89,8 @@ NUM_EPOCHS = 1000
 SS = OrthogonalSequence()
 TT = TrivialSequence(SS.group_sequence())
 V2 = SS * SS
-# inner = V2 + V2 + V2 + SS + SS + SS
-inner = 10 * TT + 10 * SS + 4 * V2 + 2 * (V2 * SS)
+inner = 4 * SS + 4 * V2
+# inner = 10 * TT + 10 * SS + 4 * V2 + 2 * (V2 * SS)
 # inner = (V2 + SS) * SS
 # inner = (
 # V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS
@@ -107,7 +107,7 @@ for i in dimensions_to_extend:
     interdimensional_test.append(ext_test_data)
 
 d = 6
-num_inner_layers = 1
+num_inner_layers = 2
 train_dataset = []
 test_dataset = []
 N = 3000
@@ -115,19 +115,19 @@ Nt = 1000
 for j in range(N):
     x = random_sample(d)
     y = to_evaluate(x)
-    train_dataset.append((x, y))
-    # train_dataset.append((x.reshape((d**2,)), y))
+    # train_dataset.append((x, y))
+    train_dataset.append((x.reshape((d**2,)), y))
 
 for j in range(Nt):
     x = random_sample(d)
     y = to_evaluate(x)
-    # test_dataset.append((x.reshape((d**2,)), y))
-    test_dataset.append((x, y))
+    test_dataset.append((x.reshape((d**2,)), y))
+    # test_dataset.append((x, y))
 
 
 def train_model(compatible):
     NN = EMLPSequence(
-        SS,
+        V2,
         TT,
         num_inner_layers * [inner],
         is_compatible=compatible,
@@ -173,7 +173,7 @@ def train_model(compatible):
             gradients.append(g)
             # print(g))
         train_losses.append(np.mean(losses))
-        gra_n.append(np.mean(gradient_norms))
+
         if not epoch % 10:
             test_losses.append(
                 np.mean([loss(jnp.array(x), jnp.array(y)) for (x, y) in testloader])
@@ -181,6 +181,8 @@ def train_model(compatible):
             print(
                 f"Epoch {epoch} Train loss {train_losses[-1]} Test loss {test_losses[-1]} Equi error {equivariance_err(model, jnp.array(x), jnp.array(y))}"
             )
+        if train_losses[-1] < 1e-10:
+            break
 
     NN.set_trained_emlp_at_level(model)
     return model, NN, train_losses, test_losses

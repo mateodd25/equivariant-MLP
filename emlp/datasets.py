@@ -33,14 +33,18 @@ class SymmetricProjection(object):
 
 @export
 class TraceData(object):
-    def __init__(self, sample_size=1024, dimension=4):
+    def __init__(self, N=1024, dimension=4):
         super().__init__()
         self.dim = dimension
-        self.X = np.random.randn(sample_size, self.dim**2)
-        self.rep_in = Vector(S(dimension)) * Vector(S(dimension))
-        self.rep_out = Vector(S(dimension))
+        self.X = np.random.randn(N, self.dim**2)
+        # self.rep_in = Vector(S(dimension)) * Vector(S(dimension))
+        # self.rep_out = Vector(S(dimension))
+        self.rep_in = Vector * Vector
+        self.rep_out = Scalar
         self.symmetry = S(dimension)
-        self.Y = [np.trace(x.reshape(dimension, dimension)) for x in self.X]
+        self.Y = np.array(
+            [np.trace(x.reshape(dimension, dimension)) for x in self.X]
+        ).reshape((N, 1))
         self.stats = 0, 1, 0, 1
 
     def __getitem__(self, i):
@@ -48,6 +52,9 @@ class TraceData(object):
 
     def __len__(self):
         return self.X.shape[0]
+
+    def default_aug(self, model):
+        return GroupAugmentation(model, self.rep_in, self.rep_out, self.symmetry)
 
 
 @export

@@ -77,9 +77,6 @@ class BiLinear(Module):
         # compatible with non sumreps? need to check
         W = self.weight_proj(self.w.value, x)
         out = 0.1 * (W @ x[..., None])[..., 0]
-        import pdb
-
-        pdb.set_trace()
         return out
 
 
@@ -263,9 +260,9 @@ class ExtendableLinear(nn.Linear):
                 self.b = TrainVar(
                     objax.random.uniform((self.bias_size,)) / jnp.sqrt(1e2)
                 )
-                print("Use bias")
+                logging.debug("Use bias")
             else:
-                print("No bias")
+                logging.debug("No bias")
                 self.bias_basis = None
             # TODO: Fix this hack once EquivariantLinearMaps is implemented properly. (Receive basis as oppposed to compatibility conditions)
             if compatibility_constraints is not None:
@@ -273,11 +270,11 @@ class ExtendableLinear(nn.Linear):
                     repin, repout, compatibility_constraints
                 )  # TODO: Make class to handle this?
                 self.basis = rep_W.equivariant_basis()
-                print("Compatible")
+                logging.debug("Compatible")
             else:
                 self.rep_W = rep_W = repin >> repout
                 self.basis = rep_W.equivariant_basis()
-                print("Not compatatible")
+                logging.debug("No compatible")
             basis_size = self.basis.shape[1]
             self.w = TrainVar(objax.random.uniform((basis_size,)) / jnp.sqrt(1e2))
 
@@ -365,6 +362,9 @@ class ExtendableEMLPBlock(Module):
         learned_parameters=None,
     ):
         super().__init__()
+        logging.info(
+            f"{'Compatible block' if compatibility_constraints is not None else 'Free block'} ({rep_in.size()}, {rep_out.size()})"
+        )
         self.use_bilinear = use_bilinear
         self.use_gates = use_gates
         learned_linear_parameters = None
@@ -554,6 +554,9 @@ class EMLPSequence(object):
         gseq_out = GatedSequence(seq_out) if self.use_gates else seq_out
         operator_sequence = EquivariantOperatorSequence(seq_in, gseq_out)
         b_at_new_level = None
+        # import pdb
+
+        # pdb.set_trace()
 
         if self.trained_level > level:
             # When the new level is below the trained level we

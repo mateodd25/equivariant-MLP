@@ -12,7 +12,7 @@ import emlp.reps
 import emlp.groups
 import objax
 import emlp.datasets
-from emlp.datasets import Inertia, O5Synthetic, ParticleInteraction
+from emlp.datasets import Inertia, O5Synthetic, ParticleInteraction, TraceData
 
 log_levels = {
     "critical": logging.CRITICAL,

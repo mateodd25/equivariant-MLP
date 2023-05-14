@@ -86,21 +86,22 @@ def test_different_dimensions(NN, dimensions_to_extend, test_data):
 if __name__ == "__main__":
     np.random.seed(926)
     BS = 500
-    lr = 5e-3
+    lr = 8e-3
     NUM_EPOCHS = 1000
+    accuracy = 1e-8
 
     SS = PermutationSequence()
     TT = TrivialSequence(SS.group_sequence())
     V2 = SS * SS
     seq_in = V2
-    inner = V2 + V2 + V2 + V2 + SS + SS + SS + SS
+    inner = 4 * SS + 4 * V2
     seq_out = V2
     # inner = (
     # V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS
     # )  # Two inner layers of this are good for l1 trace
     # inner = V2 + V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS + SS + SS
 
-    dimensions_to_extend = range(2, 11)
+    dimensions_to_extend = range(2, 6)
     interdimensional_test = []
     for i in dimensions_to_extend:
         ext_test_data = []
@@ -112,7 +113,7 @@ if __name__ == "__main__":
     d = 4
     train_dataset = []
     test_dataset = []
-    N = 2000
+    N = 3000
     for j in range(N):
         x = random_sample(d)
         y = to_evaluate(x)
@@ -125,7 +126,7 @@ if __name__ == "__main__":
 
     def train_model(compatible):
         NN = EMLPSequence(
-            seq_in, seq_out, 2 * [inner], is_compatible=compatible
+            seq_in, seq_out, 2 * [inner], is_compatible=compatible, use_gates=False
         )  # Rep in  # Rep out  # Hidden layers
         model = NN.emlp_at_level(d)
 
@@ -171,6 +172,8 @@ if __name__ == "__main__":
                 print(
                     f"Epoch {epoch} Train loss {train_losses[-1]} Test loss {test_losses[-1]} Equi error {equivariance_err(model, jnp.array(x), jnp.array(y))}"
                 )
+            if train_losses[-1] < accuracy:
+                break
 
         NN.set_trained_emlp_at_level(model)
         return model, NN, train_losses, test_losses
