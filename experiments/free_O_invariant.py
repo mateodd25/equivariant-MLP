@@ -116,7 +116,7 @@ if __name__ == "__main__":
     T0 = TrivialSequence(T1.group_sequence())
     T2 = T1 * T1
     seq_in = T1 + T1
-    inner = 20 * T0 + 10 * T1 + 5 * T2 + 2 * (T2 * T1)
+    inner = 20 * T0 + 15 * T1 + 8 * T2 + 4 * (T2 * T1)
     # inner = 20 * T0 + 3 * T1 + T2
     seq_out = T0
 
