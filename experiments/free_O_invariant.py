@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 #!/usr/bin/env python3
 
+import logging
 import objax
 import jax.numpy as jnp
 import numpy as np
@@ -11,6 +12,7 @@ import gc
 import pickle
 from emlp.reps import (
     OrthogonalSequence,
+    PermutationSequence,
     TrivialSequence,
     EquivariantOperatorSequence,
     null_space,
@@ -102,19 +104,25 @@ def test_different_dimensions(NN, dimensions_to_extend, test_data):
 
 
 if __name__ == "__main__":
+    logging.getLogger().setLevel(logging.INFO)
     np.random.seed(926)
     BS = 500
-    lr = 9e-3
-    NUM_EPOCHS = 1000
+    lr = 4e-3
+    NUM_EPOCHS = 5000
+    # NUM_EPOCHS = 0
 
     T1 = OrthogonalSequence()
+    # T1 = PermutationSequence()
     T0 = TrivialSequence(T1.group_sequence())
     T2 = T1 * T1
     seq_in = T1 + T1
-    inner = 10 * T0 + 3 * T1 + 2 * T2 + 1 * (T2 * T1)
+    inner = 20 * T0 + 10 * T1 + 5 * T2 + 2 * (T2 * T1)
+    # inner = 20 * T0 + 3 * T1 + T2
     seq_out = T0
 
-    dimensions_to_extend = range(2, 11)
+    # dimensions_to_extend = range(2, 8)
+    d = 3
+    dimensions_to_extend = range(d, d + 1)
     interdimensional_test = []
     for i in dimensions_to_extend:
         ext_test_data = []
@@ -123,7 +131,6 @@ if __name__ == "__main__":
             ext_test_data.append((x, to_evaluate(x)))
         interdimensional_test.append(ext_test_data)
 
-    d = 3
     train_dataset = []
     test_dataset = []
     N = 3000
@@ -139,11 +146,13 @@ if __name__ == "__main__":
 
     def train_model(compatible):
         NN = EMLPSequence(
-            seq_in, seq_out, 2 * [inner], is_compatible=compatible
+            seq_in, seq_out, 2 * [inner], is_compatible=compatible, use_gates=True
         )  # Rep in  # Rep out  # Hidden layers
         model = NN.emlp_at_level(d)
 
         opt = objax.optimizer.Adam(model.vars())
+
+        print(f"Number of variables: {sum([v.shape[0] for v in model.vars()])}")
 
         @objax.Jit
         @objax.Function.with_vars(model.vars())
@@ -162,7 +171,6 @@ if __name__ == "__main__":
 
         trainloader = DataLoader(train_dataset, batch_size=BS, shuffle=True)
         testloader = DataLoader(test_dataset, batch_size=BS, shuffle=True)
-        print("Generated the data")
 
         test_losses = []
         train_losses = []

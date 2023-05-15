@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-
-#!/usr/bin/env python3
 import jax.numpy as jnp
 from jax import jit
 from emlp.reps import Scalar
@@ -8,7 +6,15 @@ import numpy as np
 from emlp.utils import export
 from plum import dispatch
 from ..group_sequences import PermutationGroupSequence, OrthogonalGroupSequence
-from .linear_operators import I, LazyDirectSum, LazyKron, SlicedI, lazify, ConcatLazy
+from .linear_operators import (
+    I,
+    LazyDirectSum,
+    LazyKron,
+    LazyPerm,
+    SlicedI,
+    lazify,
+    ConcatLazy,
+)
 from .representation import ScalarRep, V
 from .product_sum_reps import SumRep
 from .utils import null_space
@@ -247,8 +253,9 @@ def bilinear_aux(rep_in, rep_out):
 # Operations
 # --------------------------------------------------------------------------------
 # The  following define sums and tensor products of consistent sequences.
-# *Warning* The way we compute the presentation and generation degree only works
-# for permutation groups. It is unclear how to compute these for general representations.
+# *Warning* The way we compute the presentation and generation degree is only theoretically
+# justified for for (signed) permutation groups. It is unclear how to compute these for
+# general representations.
 # TODO: Have a more robust way to compute these degrees for other representations.
 
 
@@ -267,7 +274,14 @@ class SumSequence(ConsistentSequence):
             seq.sequences if isinstance(seq, SumSequence) else {seq: 1}
             for seq in sequences
         ]
-        self.sequences = self._compute_canonical(seq_counters)
+        block_perms = [
+            seq.block_perm if isinstance(seq, SumSequence) else np.array([0])
+            for seq in sequences
+        ]
+        self.sequences, self.block_perm = self._compute_canonical(
+            seq_counters, block_perms
+        )
+        self.inv_block_perm = np.argsort(self.block_perm)
         self.generation_degree = reduce(
             max, [seq.generation_degree for seq in self.sequences.keys()]
         )
@@ -277,21 +291,37 @@ class SumSequence(ConsistentSequence):
         self._group_sequence = next(iter(self.sequences)).group_sequence()
         self.is_permutation = all([seq.is_permutation for seq in self.sequences.keys()])
         # import pdb; pdb.set_trace()
-        # self._num_summands = sum([ for ])
 
-    def _compute_canonical(self, seq_counters):
+    def _compute_canonical(self, seq_counters, block_perms):
         unique_seq = sorted(
             reduce(lambda a, b: a | b, [seq.keys() for seq in seq_counters])
         )
         merged_counts = defaultdict(int)
+        ids = [0] * len(seq_counters)
+        shifted_block_perms = []
+        perm_list = []
+        n = 0
+        for perm in block_perms:
+            shifted_block_perms.append(n + perm)
+            n += len(perm)
+
+        # for seq in unique_seq:
+        #     for cs in seq_counters:
+        #         if seq in cs:
+        #             merged_counts[seq] += cs[seq]
         for seq in unique_seq:
-            for cs in seq_counters:
-                if seq in cs:
-                    merged_counts[seq] += cs[seq]
-        return merged_counts
+            for i in range(len(seq_counters)):
+                counter = seq_counters[i].get(seq, 0)
+                if counter > 0:
+                    perm_list.append(
+                        shifted_block_perms[i][ids[i] : (ids[i] + counter)]
+                    )
+                    ids[i] += counter
+                    merged_counts[seq] += counter
+        return merged_counts, np.concatenate(perm_list)
 
     def num_sumands(self):
-        pass
+        return len(self.block_perm)
 
     # return len(sel)
 
@@ -325,14 +355,29 @@ class SumSequence(ConsistentSequence):
     # )
 
     def representation(self, j):
-        reps = [count * seq.representation(j) for seq, count in self.sequences.items()]
-        return SumRep(*reps)
+        reps = np.array(
+            [
+                seq.representation(j)
+                for seq, count in self.sequences.items()
+                for _ in range(count)
+            ]
+        )
+        return SumRep(*(reps[self.inv_block_perm]))
+
+    def permutation(self, j):
+        return self.representation(j).perm
 
     def up_embedding(self, j):
         """Direct sum of the embeddings"""
         up_embeddings = [seq.up_embedding(j) for seq in self.sequences]
         multiplicities = self.sequences.values()
-        return LazyDirectSum(up_embeddings, multiplicities)
+        perm_low = self.permutation(j)
+        inv_high = np.argsort(self.permutation(j + 1))
+        return (
+            LazyPerm(inv_high)
+            @ LazyDirectSum(up_embeddings, multiplicities)
+            @ LazyPerm(perm_low)
+        )
 
     def group_sequence(self):
         """Group sequence shared by both summands"""
@@ -363,7 +408,7 @@ class SumSequence(ConsistentSequence):
 class SumSequenceFromCollection(SumSequence):
     def __init__(self, counter, perm=None):
         self.sequences = counter
-        self.perm = np.arange(self.num_sumands()) if perm is None else perm
+        self.perm = counter[next(iter(counter))] if perm is None else perm
         self.sequences, self.perm = self._compute_canonical([counter], [self.perm])
         self.invperm = np.argsort(self.perm)
         self.is_permutation = all(rep.is_permutation for rep in self.sequences.keys())
@@ -592,8 +637,8 @@ class PermutationSequence(ConsistentSequence):
 
     def __init__(self):
         """Initialize the sequence."""
-        self.presentation_degree = 2
-        self.generation_degree = 2
+        self.presentation_degree = 1
+        self.generation_degree = 1
         self._group_sequence = PermutationGroupSequence()
         self.is_permutation = True
 
