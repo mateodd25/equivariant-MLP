@@ -107,19 +107,20 @@ def test_different_dimensions(NN, dimensions_to_extend, test_data):
 
 
 BS = 600
-lr = 1e-3
+lr = 8e-3
 NUM_EPOCHS = 1000
 
 T1 = PermutationSequence()
-# OO = OrthogonalSequence()
+# T1 = OrthogonalSequence()
 T0 = TrivialSequence(T1.group_sequence())
 T2 = T1 * T1
-# inner = 10 * T0 + 6 * T1 + 2 * T2
-inner = 4 * T0 + 4 * T1 + 2 * T2
-num_inner_layers = 3
+T3 = T2 * T1
+inner = 20 * T0 + 10 * T1 + 2 * T2 + T3
+# inner = 4 * T0 + 4 * T1 + 2 * T2
+num_inner_layers = 2
 
 
-dimensions_to_extend = range(2, 6)
+dimensions_to_extend = range(2, 11)
 interdimensional_test = []
 for i in dimensions_to_extend:
     ext_test_data = []
@@ -128,7 +129,7 @@ for i in dimensions_to_extend:
         ext_test_data.append((x, to_evaluate(x)))
     interdimensional_test.append(ext_test_data)
 
-d = 4
+d = 3
 train_dataset = []
 test_dataset = []
 N = 3000
@@ -149,8 +150,8 @@ def train_model(compatible):
         T1,
         num_inner_layers * [inner],
         is_compatible=compatible,
-        use_bilinear=False,
-        use_gates=False,
+        use_bilinear=True,
+        use_gates=True,
     )  # Rep in  # Rep out  # Hidden layers
     model = NN.emlp_at_level(d)
 

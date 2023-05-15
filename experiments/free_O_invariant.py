@@ -116,13 +116,13 @@ if __name__ == "__main__":
     T0 = TrivialSequence(T1.group_sequence())
     T2 = T1 * T1
     seq_in = T1 + T1
-    inner = 20 * T0 + 15 * T1 + 8 * T2 + 4 * (T2 * T1)
-    # inner = 20 * T0 + 3 * T1 + T2
+    # inner = 20 * T0 + 15 * T1 + 8 * T2 + 4 * (T2 * T1)
+    inner = 31 * T0 + 10 * T1 + 5 * T2 + 2 * (T2 * T1)
     seq_out = T0
 
-    # dimensions_to_extend = range(2, 8)
+    dimensions_to_extend = range(2, 7)
     d = 3
-    dimensions_to_extend = range(d, d + 1)
+    # dimensions_to_extend = range(d, d + 1)
     interdimensional_test = []
     for i in dimensions_to_extend:
         ext_test_data = []
