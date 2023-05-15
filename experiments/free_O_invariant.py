@@ -107,8 +107,8 @@ if __name__ == "__main__":
     logging.getLogger().setLevel(logging.INFO)
     np.random.seed(926)
     BS = 500
-    lr = 4e-3
-    NUM_EPOCHS = 5000
+    lr = 6e-3
+    NUM_EPOCHS = 500
     # NUM_EPOCHS = 0
 
     T1 = OrthogonalSequence()
