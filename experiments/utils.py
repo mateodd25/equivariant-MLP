@@ -22,6 +22,18 @@ import numpy as np
 #     return datasets
 
 
+def _norm_columns(x):
+    xnorms = jnp.sum(x * x, 0)
+    return xnorms
+
+
+def angle_loss(yhat, y):
+    return jnp.mean(
+        1
+        - jnp.sum(yhat * y, 0) ** 2 * (1 / _norm_columns(yhat) * (1 / _norm_columns(y)))
+    )
+
+
 def generate_datasets_across_dimensions(
     dimensions, random_sample, true_mapping, n=1024
 ):
@@ -107,6 +119,10 @@ def test_different_dimensions_regression(NN, dimensions_to_extend, test_data):
     return test_different_dimensions(NN, dimensions_to_extend, test_data, loss)
 
 
+def test_different_dimensions_angle(NN, dimensions_to_extend, test_data):
+    return test_different_dimensions(NN, dimensions_to_extend, test_data, angle_loss)
+
+
 # def get_data_loaders(batch_size, datasets):
 #     return {
 #         k: LoaderTo(
@@ -169,7 +185,7 @@ def train_model(
     for epoch in tqdm(range(solver_config["num_epochs"])):
         losses = []
         for x, y in trainloader:
-            v, g = train_op(jnp.array(x), jnp.array(y), solver_config["step_size"])
+            v, _ = train_op(jnp.array(x), jnp.array(y), solver_config["step_size"])
             losses.append(v)
         train_losses.append(np.mean(losses))
         if not epoch % print_frequency:
@@ -221,6 +237,32 @@ def train_regression(
     )
 
 
+def train_angle(
+    free_network,
+    level,
+    train_dataset,
+    test_dataset,
+    dir_results=None,
+    print_frequency=10,
+    solver_config={
+        "step_size": 6e-3,
+        "num_epochs": 500,
+        "batch_size": 500,
+        "tolerance": 1e-10,
+    },
+):
+    return train_model(
+        free_network,
+        level,
+        train_dataset,
+        test_dataset,
+        angle_loss,
+        dir_results=dir_results,
+        print_frequency=print_frequency,
+        solver_config=solver_config,
+    )
+
+
 def generate_data_train_and_test(
     seed,
     dimensions_to_extend,
@@ -235,11 +277,18 @@ def generate_data_train_and_test(
     num_hidden_layers,
     solver_config,
     num_rep,
+    use_gates=False,
+    is_regression=True,
 ):
     train_losses = {"free": [], "compatible": []}
     times_to_extend = {"free": [], "compatible": []}
     test_error_across_dim = {"free": [], "compatible": []}
-
+    training_method = train_regression if is_regression else train_angle
+    test_method = (
+        test_different_dimensions_regression
+        if is_regression
+        else test_different_dimensions_angle
+    )
     with FixedNumpySeed(seed), FixedPytorchSeed(seed):
         interdimensional_test_sets = generate_datasets_across_dimensions(
             dimensions_to_extend,
@@ -261,10 +310,10 @@ def generate_data_train_and_test(
                 seq_out,
                 num_hidden_layers * [inner],
                 is_compatible=True,
-                use_gates=False,
+                use_gates=use_gates,
             )
 
-            NN_compatible, train_loss, _, _ = train_regression(
+            NN_compatible, train_loss, _, _ = training_method(
                 NN_compatible,
                 learning_dimension,
                 train_set,
@@ -273,7 +322,7 @@ def generate_data_train_and_test(
             )
             train_losses["compatible"].append(train_loss)
 
-            times, test_error, _ = test_different_dimensions_regression(
+            times, test_error, _ = test_method(
                 NN_compatible,
                 dimensions_to_extend,
                 interdimensional_test_sets,
@@ -287,10 +336,10 @@ def generate_data_train_and_test(
                 num_hidden_layers * [inner],
                 use_bilinear=True,
                 is_compatible=False,
-                use_gates=False,
+                use_gates=use_gates,
             )
 
-            NN_free, train_loss, test_loss, equiv_error = train_regression(
+            NN_free, train_loss, _, _ = training_method(
                 NN_free,
                 learning_dimension,
                 train_set,
@@ -298,7 +347,7 @@ def generate_data_train_and_test(
                 solver_config=solver_config,
             )
             train_losses["free"].append(train_loss)
-            times, test_error, equiv_error = test_different_dimensions_regression(
+            times, test_error, _ = test_method(
                 NN_free,
                 dimensions_to_extend,
                 interdimensional_test_sets,

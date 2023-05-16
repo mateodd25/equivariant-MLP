@@ -4,27 +4,19 @@ import pickle
 import os
 import numpy as np
 import logging
-from emlp.reps import OrthogonalSequence, TrivialSequence
+from emlp.reps import PermutationSequence
 from utils import (
     generate_data_train_and_test,
 )
 from generate_figures import generate_figures
-from math import sin
 
 
-def run_O_invariant_experiment():
+def run_diagonal_extraction_experiment():
     def random_sample(size):
-        return np.random.randn(2 * size)
+        return np.random.randn(size, size)
 
     def true_mapping(x):
-        d = int(len(x) / 2)
-        x1 = x[:d]
-        x2 = x[d:]
-        y = (
-            sin(np.linalg.norm(x1))
-            - np.linalg.norm(x2) ** 3 / 2
-            + np.dot(x1, x2) / (np.linalg.norm(x1) * np.linalg.norm(x2))
-        )
+        y = np.diag(np.diag(x))
         return y
 
     # Parameters
@@ -32,24 +24,21 @@ def run_O_invariant_experiment():
     seed = 926
     n_train = 3000
     n_test = 1000
-    dimensions_to_extend = list(range(2, 7))
-    learning_dimension = 3
+    dimensions_to_extend = list(range(2, 16))
+    learning_dimension = 4
     num_rep = 3
     solver_config = {
-        "step_size": 6e-3,
+        "step_size": 8e-3,
         "num_epochs": 300,
         "batch_size": 500,
         "tolerance": 1e-8,
     }
 
     # Architecture
-    T1 = OrthogonalSequence()
-    T0 = TrivialSequence(T1.group_sequence())
-    T2 = T1 * T1
-    T3 = T2 * T1
-    seq_in = T1 + T1
-    inner = 31 * T0 + 10 * T1 + 5 * T2 + 2 * T3
-    seq_out = T0
+    T1 = PermutationSequence()
+    seq_in = T1 * T1
+    inner = 4 * T1 + 4 * seq_in
+    seq_out = seq_in
     num_hidden_layers = 2
 
     # Generate data, train, and test
@@ -67,7 +56,6 @@ def run_O_invariant_experiment():
         num_hidden_layers,
         solver_config,
         num_rep,
-        use_gates=True,
     )
 
     # Save and generate figures
@@ -88,7 +76,7 @@ def run_O_invariant_experiment():
         test_error_across_dim=test_error_across_dim,
     )
     folder_name = datetime.datetime.now().strftime("%I:%M%p-%B-%d-%Y")
-    results_directory = os.path.join("results", "O_invariant", folder_name)
+    results_directory = os.path.join("results", "diagonal_extraction", folder_name)
     results_path = os.path.join(results_directory, "state.p")
     os.mkdir(results_directory)
     pickle.dump(state, open(results_path, "wb"))
@@ -97,4 +85,4 @@ def run_O_invariant_experiment():
 
 
 if __name__ == "__main__":
-    run_O_invariant_experiment()
+    run_diagonal_extraction_experiment()

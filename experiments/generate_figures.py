@@ -45,15 +45,19 @@ def generate_figures(results_path):
     avg_compatible, min_compatible, max_compatible = extract_avg_min_max(
         data["train_losses"], "compatible", l_compatible
     )
-    # l_free = min([len(l) for l in data["train_losses"]["free"]])
-    # avg_free, min_free, max_free = extract_avg_min_max(data["train_losses"], "free", l_free)
+    l_free = min([len(l) for l in data["train_losses"]["free"]])
+    avg_free, min_free, max_free = extract_avg_min_max(
+        data["train_losses"], "free", l_free
+    )
 
     with plt.style.context(["science"]):
         fig, ax = plt.subplots()
-        # ax.plot(range(l_free), avg_free, label="Free", color="#ffb000", linestyle="dashed")
-        # ax.fill_between(
-        # range(l_free), min_free, max_free, color="#ffb000", linewidth=0.0, alpha=0.2
-        # )
+        ax.plot(
+            range(l_free), avg_free, label="Free", color="#ffb000", linestyle="dashed"
+        )
+        ax.fill_between(
+            range(l_free), min_free, max_free, color="#ffb000", linewidth=0.0, alpha=0.2
+        )
         ax.plot(
             range(l_compatible), avg_compatible, label="Compatible", color="#785ef0"
         )
@@ -73,5 +77,5 @@ def generate_figures(results_path):
 
 
 if __name__ == "__main__":
-    results_path = "results/trace/06:13PM-May-15-2023"
+    results_path = "results/symmetric_projection/10:13PM-May-15-2023"
     generate_figures(results_path)

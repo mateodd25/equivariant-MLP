@@ -1,55 +1,48 @@
 #!/usr/bin/env python3
+from scipy.sparse.linalg import svds
 import datetime
 import pickle
 import os
 import numpy as np
 import logging
-from emlp.reps import OrthogonalSequence, TrivialSequence
+from emlp.reps import PermutationSequence, TrivialSequence
 from utils import (
     generate_data_train_and_test,
 )
 from generate_figures import generate_figures
-from math import sin
 
 
-def run_O_invariant_experiment():
+def run_singular_vector_experiment():
     def random_sample(size):
-        return np.random.randn(2 * size)
+        return np.random.rand(size, size)
 
     def true_mapping(x):
-        d = int(len(x) / 2)
-        x1 = x[:d]
-        x2 = x[d:]
-        y = (
-            sin(np.linalg.norm(x1))
-            - np.linalg.norm(x2) ** 3 / 2
-            + np.dot(x1, x2) / (np.linalg.norm(x1) * np.linalg.norm(x2))
-        )
-        return y
+        _, _, vh = svds(x, k=1)
+        return vh.reshape(-1)
 
     # Parameters
     logging.getLogger().setLevel(logging.INFO)
     seed = 926
     n_train = 3000
     n_test = 1000
-    dimensions_to_extend = list(range(2, 7))
+    dimensions_to_extend = list(range(2, 11))
     learning_dimension = 3
     num_rep = 3
     solver_config = {
-        "step_size": 6e-3,
+        "step_size": 8e-3,
         "num_epochs": 300,
-        "batch_size": 500,
+        "batch_size": 600,
         "tolerance": 1e-8,
     }
 
     # Architecture
-    T1 = OrthogonalSequence()
+    T1 = PermutationSequence()
     T0 = TrivialSequence(T1.group_sequence())
     T2 = T1 * T1
     T3 = T2 * T1
-    seq_in = T1 + T1
-    inner = 31 * T0 + 10 * T1 + 5 * T2 + 2 * T3
-    seq_out = T0
+    seq_in = T2
+    inner = 25 * T0 + 10 * T1 + 2 * T2 + T3
+    seq_out = T1
     num_hidden_layers = 2
 
     # Generate data, train, and test
@@ -67,7 +60,7 @@ def run_O_invariant_experiment():
         num_hidden_layers,
         solver_config,
         num_rep,
-        use_gates=True,
+        is_regression=False,  # Train with angle loss
     )
 
     # Save and generate figures
@@ -88,7 +81,7 @@ def run_O_invariant_experiment():
         test_error_across_dim=test_error_across_dim,
     )
     folder_name = datetime.datetime.now().strftime("%I:%M%p-%B-%d-%Y")
-    results_directory = os.path.join("results", "O_invariant", folder_name)
+    results_directory = os.path.join("results", "singular_vector", folder_name)
     results_path = os.path.join(results_directory, "state.p")
     os.mkdir(results_directory)
     pickle.dump(state, open(results_path, "wb"))
@@ -97,4 +90,4 @@ def run_O_invariant_experiment():
 
 
 if __name__ == "__main__":
-    run_O_invariant_experiment()
+    run_singular_vector_experiment()
