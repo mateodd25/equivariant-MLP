@@ -26,11 +26,11 @@ def run_singular_vector_experiment():
     n_train = 3000
     n_test = 1000
     dimensions_to_extend = list(range(2, 11))
-    learning_dimension = 6
+    learning_dimension = 4
     num_rep = 3
     solver_config = {
         "step_size": 8e-3,
-        "num_epochs": 0,
+        "num_epochs": 300,
         # "num_epochs": 300,
         "batch_size": 600,
         "tolerance": 1e-8,
@@ -42,8 +42,8 @@ def run_singular_vector_experiment():
     T2 = T1 * T1
     T3 = T2 * T1
     seq_in = T2
-    inner = 25 * T0 + 10 * T1 + 2 * T2 + T3
-    # inner = T0 + T1 + T2 + T3
+    # inner = 25 * T0 + 10 * T1 + 2 * T2 + T3
+    inner = 4 * T0 + 4 * T1 + 2 * T2
     seq_out = T1
     num_hidden_layers = 2
 
