@@ -592,8 +592,8 @@ class PermutationSequence(ConsistentSequence):
 
     def __init__(self):
         """Initialize the sequence."""
-        self.presentation_degree = 2
-        self.generation_degree = 2
+        self.presentation_degree = 1
+        self.generation_degree = 1
         self._group_sequence = PermutationGroupSequence()
         self.is_permutation = True
 
