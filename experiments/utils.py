@@ -330,21 +330,21 @@ def generate_data_train_and_test(
         else test_different_dimensions_angle
     )
     with FixedNumpySeed(seed), FixedPytorchSeed(seed):
-        interdimensional_test_sets = generate_datasets_across_dimensions(
-            dimensions_to_extend,
-            random_sample,
-            true_mapping,
-            n=n_test,
-        )
-        train_set, test_set = generate_datasets_fixed_dimension(
-            learning_dimension,
-            random_sample,
-            true_mapping,
-            n=n_train,
-            nt=n_test,
-        )
-
         for j in range(num_rep):
+            interdimensional_test_sets = generate_datasets_across_dimensions(
+                dimensions_to_extend,
+                random_sample,
+                true_mapping,
+                n=n_test,
+            )
+            train_set, test_set = generate_datasets_fixed_dimension(
+                learning_dimension,
+                random_sample,
+                true_mapping,
+                n=n_train,
+                nt=n_test,
+            )
+
             NN_compatible = EMLPSequence(
                 seq_in,
                 seq_out,
