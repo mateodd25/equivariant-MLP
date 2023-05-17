@@ -329,69 +329,61 @@ def generate_data_train_and_test(
         if is_regression
         else test_different_dimensions_angle
     )
-    with FixedNumpySeed(seed), FixedPytorchSeed(seed):
-        for j in range(num_rep):
-            interdimensional_test_sets = generate_datasets_across_dimensions(
-                dimensions_to_extend,
-                random_sample,
-                true_mapping,
-                n=n_test,
-            )
-            train_set, test_set = generate_datasets_fixed_dimension(
-                learning_dimension,
-                random_sample,
-                true_mapping,
-                n=n_train,
-                nt=n_test,
-            )
+    # with FixedNumpySeed(seed), FixedPytorchSeed(seed):
+    for j in range(num_rep):
+        interdimensional_test_sets = generate_datasets_across_dimensions(
+            dimensions_to_extend,
+            random_sample,
+            true_mapping,
+            n=n_test,
+        )
+        train_set, test_set = generate_datasets_fixed_dimension(
+            learning_dimension,
+            random_sample,
+            true_mapping,
+            n=n_train,
+            nt=n_test,
+        )
 
-            NN_compatible = EMLPSequence(
-                seq_in,
-                seq_out,
-                num_hidden_layers * [inner],
-                is_compatible=True,
-                use_gates=use_gates,
-            )
+        train_loss, times, test_error = _train_and_test(
+            True,  # Compatible?
+            seq_in,
+            seq_out,
+            inner,
+            num_hidden_layers,
+            use_gates,
+            learning_dimension,
+            train_set,
+            test_set,
+            solver_config,
+            training_method,
+            test_method,
+            dimensions_to_extend,
+            interdimensional_test_sets,
+        )
+        train_losses["compatible"].append(train_loss)
+        test_error_across_dim["compatible"].append(test_error)
+        times_to_extend["compatible"].append(times)
 
-            train_loss, times, test_error = _train_and_test(
-                True,  # Compatible?
-                seq_in,
-                seq_out,
-                inner,
-                num_hidden_layers,
-                use_gates,
-                learning_dimension,
-                train_set,
-                test_set,
-                solver_config,
-                training_method,
-                test_method,
-                dimensions_to_extend,
-                interdimensional_test_sets,
-            )
-            train_losses["compatible"].append(train_loss)
-            test_error_across_dim["compatible"].append(test_error)
-            times_to_extend["compatible"].append(times)
+        train_loss, times, test_error = _train_and_test(
+            False,  # Compatible?
+            seq_in,
+            seq_out,
+            inner,
+            num_hidden_layers,
+            use_gates,
+            learning_dimension,
+            train_set,
+            test_set,
+            solver_config,
+            training_method,
+            test_method,
+            dimensions_to_extend,
+            interdimensional_test_sets,
+        )
 
-            train_loss, times, test_error = _train_and_test(
-                False,  # Compatible?
-                seq_in,
-                seq_out,
-                inner,
-                num_hidden_layers,
-                use_gates,
-                learning_dimension,
-                train_set,
-                test_set,
-                solver_config,
-                training_method,
-                test_method,
-                dimensions_to_extend,
-                interdimensional_test_sets,
-            )
-
-            train_losses["free"].append(train_loss)
-            test_error_across_dim["free"].append(test_error)
-            times_to_extend["free"].append(times)
+        train_losses["free"].append(train_loss)
+        test_error_across_dim["free"].append(test_error)
+        times_to_extend["free"].append(times)
 
     return train_losses, times_to_extend, test_error_across_dim
