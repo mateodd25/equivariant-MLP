@@ -263,6 +263,46 @@ def train_angle(
     )
 
 
+def _train_and_test(
+    compatible,
+    seq_in,
+    seq_out,
+    inner,
+    num_hidden_layers,
+    use_gates,
+    learning_dimension,
+    train_set,
+    test_set,
+    solver_config,
+    training_method,
+    test_method,
+    dimensions_to_extend,
+    interdimensional_test_sets,
+):
+    NN_compatible = EMLPSequence(
+        seq_in,
+        seq_out,
+        num_hidden_layers * [inner],
+        is_compatible=compatible,
+        use_gates=use_gates,
+    )
+
+    NN_compatible, train_loss, _, _ = training_method(
+        NN_compatible,
+        learning_dimension,
+        train_set,
+        test_set,
+        solver_config=solver_config,
+    )
+
+    times, test_error, _ = test_method(
+        NN_compatible,
+        dimensions_to_extend,
+        interdimensional_test_sets,
+    )
+    return train_loss, times, test_error
+
+
 def generate_data_train_and_test(
     seed,
     dimensions_to_extend,
@@ -313,45 +353,44 @@ def generate_data_train_and_test(
                 use_gates=use_gates,
             )
 
-            NN_compatible, train_loss, _, _ = training_method(
-                NN_compatible,
+            train_loss, times, test_error = _train_and_test(
+                True,  # Compatible?
+                seq_in,
+                seq_out,
+                inner,
+                num_hidden_layers,
+                use_gates,
                 learning_dimension,
                 train_set,
                 test_set,
-                solver_config=solver_config,
-            )
-            train_losses["compatible"].append(train_loss)
-
-            times, test_error, _ = test_method(
-                NN_compatible,
+                solver_config,
+                training_method,
+                test_method,
                 dimensions_to_extend,
                 interdimensional_test_sets,
             )
+            train_losses["compatible"].append(train_loss)
             test_error_across_dim["compatible"].append(test_error)
             times_to_extend["compatible"].append(times)
 
-            NN_free = EMLPSequence(
+            train_loss, times, test_error = _train_and_test(
+                False,  # Compatible?
                 seq_in,
                 seq_out,
-                num_hidden_layers * [inner],
-                use_bilinear=True,
-                is_compatible=False,
-                use_gates=use_gates,
-            )
-
-            NN_free, train_loss, _, _ = training_method(
-                NN_free,
+                inner,
+                num_hidden_layers,
+                use_gates,
                 learning_dimension,
                 train_set,
                 test_set,
-                solver_config=solver_config,
-            )
-            train_losses["free"].append(train_loss)
-            times, test_error, _ = test_method(
-                NN_free,
+                solver_config,
+                training_method,
+                test_method,
                 dimensions_to_extend,
                 interdimensional_test_sets,
             )
+
+            train_losses["free"].append(train_loss)
             test_error_across_dim["free"].append(test_error)
             times_to_extend["free"].append(times)
 
