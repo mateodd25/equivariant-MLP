@@ -14,7 +14,7 @@ from math import sin
 
 def run_O_invariant_experiment():
     def random_sample(size):
-        return np.random.randn(2 * size)
+        return np.random.rand(2 * size)
 
     def true_mapping(x):
         d = int(len(x) / 2)
@@ -29,14 +29,15 @@ def run_O_invariant_experiment():
 
     # Parameters
     logging.getLogger().setLevel(logging.INFO)
-    seed = 926
+    seed = 2023
     n_train = 3000
     n_test = 1000
-    dimensions_to_extend = list(range(2, 7))
+    dimensions_to_extend = list(range(2, 9))
     learning_dimension = 3
     num_rep = 3
     solver_config = {
         "step_size": 6e-3,
+        # "num_epochs": 0,
         "num_epochs": 300,
         "batch_size": 500,
         "tolerance": 1e-8,
@@ -48,7 +49,8 @@ def run_O_invariant_experiment():
     T2 = T1 * T1
     T3 = T2 * T1
     seq_in = T1 + T1
-    inner = 31 * T0 + 10 * T1 + 5 * T2 + 2 * T3
+    # inner = 31 * T0 + 10 * T1 + 5 * T2 + 2 * T3
+    inner = 10 * T0 + 5 * T1 + 5 * T2 + 3 * T3
     seq_out = T0
     num_hidden_layers = 2
 
@@ -88,7 +90,7 @@ def run_O_invariant_experiment():
         test_error_across_dim=test_error_across_dim,
     )
     folder_name = datetime.datetime.now().strftime("%I:%M%p-%B-%d-%Y")
-    results_directory = os.path.join("results", "O_invariant", folder_name)
+    results_directory = os.path.join("results", "O_invariance", folder_name)
     results_path = os.path.join(results_directory, "state.p")
     os.mkdir(results_directory)
     pickle.dump(state, open(results_path, "wb"))

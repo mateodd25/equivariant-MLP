@@ -1,23 +1,13 @@
 #!/usr/bin/env python3
-from oil.utils.utils import FixedNumpySeed, FixedPytorchSeed
 import datetime
 import pickle
 import os
 import numpy as np
 import logging
-from emlp.datasets import SymmetricProjection
-from emlp.nn import EMLPSequence
-from trainer.model_trainer import RegressorPlus
-from oil.datasetup.datasets import split_dataset
-import emlp.nn
-import emlp.reps
-import emlp.groups
 from emlp.reps import PermutationSequence
-import objax
 from utils import (
     generate_data_train_and_test,
 )
-
 from generate_figures import generate_figures
 
 

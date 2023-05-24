@@ -290,7 +290,6 @@ class SumSequence(ConsistentSequence):
         )
         self._group_sequence = next(iter(self.sequences)).group_sequence()
         self.is_permutation = all([seq.is_permutation for seq in self.sequences.keys()])
-        # import pdb; pdb.set_trace()
 
     def _compute_canonical(self, seq_counters, block_perms):
         unique_seq = sorted(
@@ -305,10 +304,6 @@ class SumSequence(ConsistentSequence):
             shifted_block_perms.append(n + perm)
             n += len(perm)
 
-        # for seq in unique_seq:
-        #     for cs in seq_counters:
-        #         if seq in cs:
-        #             merged_counts[seq] += cs[seq]
         for seq in unique_seq:
             for i in range(len(seq_counters)):
                 counter = seq_counters[i].get(seq, 0)
@@ -323,36 +318,8 @@ class SumSequence(ConsistentSequence):
     def num_sumands(self):
         return len(self.block_perm)
 
-    # return len(sel)
-
     def __hash__(self):
         return hash(tuple(self.sequences.items()))
-
-    # def __init__(self, first_sequence, second_sequence):
-    #     """Initialize with the two summands."""
-    #     self.first_sequence = first_sequence
-    #     self.second_sequence = second_sequence
-    #     self.presentation_degree = max(
-    #         first_sequence.presentation_degree, second_sequence.presentation_degree
-    #     )
-    #     self.generation_degree = max(
-    #         first_sequence.generation_degree, second_sequence.generation_degree
-    #     )
-    #     self.is_permutation = first_sequence.is_permutation and second_sequence.is_permutation
-    #     self._group_sequence = first_sequence.group_sequence()
-
-    # def representation(self, j):
-    #     """Direct sum representation"""
-    #     rep = self.first_sequence.representation(
-    #         j
-    #     ) + self.second_sequence.representation(j)
-    #     rep.G = self.group_sequence().group(j)
-    #     return rep
-
-    # def up_embedding(self, j):
-    # return LazyDirectSum(
-    #     [self.first_sequence.up_embedding(j), self.second_sequence.up_embedding(j)]
-    # )
 
     def representation(self, j):
         reps = np.array(
