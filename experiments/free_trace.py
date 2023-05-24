@@ -13,7 +13,7 @@ from generate_figures import generate_figures
 
 def run_trace_experiment():
     def random_sample(size):
-        return np.random.rand(size, size)
+        return np.random.randn(size, size)
 
     def true_mapping(x):
         return np.trace(np.matrix(x))
@@ -24,21 +24,22 @@ def run_trace_experiment():
     n_train = 3000
     n_test = 1000
     dimensions_to_extend = list(range(2, 16))
-    learning_dimension = 3
+    learning_dimension = 4
     num_rep = 3
     solver_config = {
-        "step_size": 5e-2,
+        "step_size": 8e-3,
         "num_epochs": 300,
-        "batch_size": 600,
+        "batch_size": 500,
         "tolerance": 1e-8,
     }
 
     # Architecture
-    T1 = OrthogonalSequence()
+    # T1 = OrthogonalSequence()
+    T1 = PermutationSequence()
     T0 = TrivialSequence(T1.group_sequence())
     T2 = T1 * T1
     seq_in = T2
-    inner = 4 * T1 + 4 * T2
+    inner = 2 * T1 + 2 * T2
     seq_out = T0
     num_hidden_layers = 2
 
@@ -57,6 +58,7 @@ def run_trace_experiment():
         num_hidden_layers,
         solver_config,
         num_rep,
+        # use_gates=True,
     )
 
     # Save and generate figures
