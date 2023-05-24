@@ -264,11 +264,11 @@ class ExtendableLinear(nn.Linear):
             else:
                 logging.debug("No bias")
                 self.bias_basis = None
-            # TODO: Fix this hack once EquivariantLinearMaps is implemented properly. (Receive basis as oppposed to compatibility conditions)
+            # TODO: Consider switching an implementation where we receive basis as oppposed to compatibility conditions.
             if compatibility_constraints is not None:
                 self.rep_W = rep_W = EquivariantOperators(
                     repin, repout, compatibility_constraints
-                )  # TODO: Make class to handle this?
+                )
                 self.basis = rep_W.equivariant_basis()
                 logging.debug("Compatible")
             else:
@@ -579,9 +579,8 @@ class EMLPSequence(object):
                 level, self.trained_level
             )
             right_hand_side = np.zeros(constraints.shape[0])
-            # TODO: Make sure that the sizes here are right
+            # TODO: Add checks to make sure that the sizes here are right
             right_hand_side[(-len(w)) :] = w
-            # w_at_new_level, _, _, _ = np.linalg.solve(constraints.to_dense(), right_hand_side.reshape((len(right_hand_side), 1)))
             mapping = lambda x: constraints @ x
             w_at_new_level = linear_solve.solve_normal_cg(
                 mapping, right_hand_side, init=np.ones(constraints.shape[1])

@@ -13,15 +13,6 @@ from time import time
 import numpy as np
 
 
-# def generate_datasets_in_dimensions(dataset, dimensions, n=1024, seed=926):
-#     """Generates #dimensions datasets, one per each dimension in dimensions."""
-#     datasets = {}
-#     with FixedNumpySeed(seed), FixedPytorchSeed(seed):
-#         for d in dimensions:
-#             datasets[d] = dataset(N=n, dimension=d)
-#     return datasets
-
-
 def _norm_columns(x):
     xnorms = jnp.sum(x * x, 0)
     return xnorms
@@ -121,21 +112,6 @@ def test_different_dimensions_regression(NN, dimensions_to_extend, test_data):
 
 def test_different_dimensions_angle(NN, dimensions_to_extend, test_data):
     return test_different_dimensions(NN, dimensions_to_extend, test_data, angle_loss)
-
-
-# def get_data_loaders(batch_size, datasets):
-#     return {
-#         k: LoaderTo(
-#             DataLoader(
-#                 v,
-#                 batch_size=min(batch_size, len(v)),
-#                 shuffle=(k == "train"),
-#                 num_workers=0,
-#                 pin_memory=False,
-#             )
-#         )
-#         for k, v in datasets.items()
-#     }
 
 
 def train_model(
@@ -329,61 +305,61 @@ def generate_data_train_and_test(
         if is_regression
         else test_different_dimensions_angle
     )
-    # with FixedNumpySeed(seed), FixedPytorchSeed(seed):
-    for j in range(num_rep):
-        interdimensional_test_sets = generate_datasets_across_dimensions(
-            dimensions_to_extend,
-            random_sample,
-            true_mapping,
-            n=n_test,
-        )
-        train_set, test_set = generate_datasets_fixed_dimension(
-            learning_dimension,
-            random_sample,
-            true_mapping,
-            n=n_train,
-            nt=n_test,
-        )
+    with FixedNumpySeed(seed), FixedPytorchSeed(seed):
+        for j in range(num_rep):
+            interdimensional_test_sets = generate_datasets_across_dimensions(
+                dimensions_to_extend,
+                random_sample,
+                true_mapping,
+                n=n_test,
+            )
+            train_set, test_set = generate_datasets_fixed_dimension(
+                learning_dimension,
+                random_sample,
+                true_mapping,
+                n=n_train,
+                nt=n_test,
+            )
 
-        train_loss, times, test_error = _train_and_test(
-            True,  # Compatible?
-            seq_in,
-            seq_out,
-            inner,
-            num_hidden_layers,
-            use_gates,
-            learning_dimension,
-            train_set,
-            test_set,
-            solver_config,
-            training_method,
-            test_method,
-            dimensions_to_extend,
-            interdimensional_test_sets,
-        )
-        train_losses["compatible"].append(train_loss)
-        test_error_across_dim["compatible"].append(test_error)
-        times_to_extend["compatible"].append(times)
+            train_loss, times, test_error = _train_and_test(
+                True,  # Compatible?
+                seq_in,
+                seq_out,
+                inner,
+                num_hidden_layers,
+                use_gates,
+                learning_dimension,
+                train_set,
+                test_set,
+                solver_config,
+                training_method,
+                test_method,
+                dimensions_to_extend,
+                interdimensional_test_sets,
+            )
+            train_losses["compatible"].append(train_loss)
+            test_error_across_dim["compatible"].append(test_error)
+            times_to_extend["compatible"].append(times)
 
-        train_loss, times, test_error = _train_and_test(
-            False,  # Compatible?
-            seq_in,
-            seq_out,
-            inner,
-            num_hidden_layers,
-            use_gates,
-            learning_dimension,
-            train_set,
-            test_set,
-            solver_config,
-            training_method,
-            test_method,
-            dimensions_to_extend,
-            interdimensional_test_sets,
-        )
+            train_loss, times, test_error = _train_and_test(
+                False,  # Compatible?
+                seq_in,
+                seq_out,
+                inner,
+                num_hidden_layers,
+                use_gates,
+                learning_dimension,
+                train_set,
+                test_set,
+                solver_config,
+                training_method,
+                test_method,
+                dimensions_to_extend,
+                interdimensional_test_sets,
+            )
 
-        train_losses["free"].append(train_loss)
-        test_error_across_dim["free"].append(test_error)
-        times_to_extend["free"].append(times)
+            train_losses["free"].append(train_loss)
+            test_error_across_dim["free"].append(test_error)
+            times_to_extend["free"].append(times)
 
     return train_losses, times_to_extend, test_error_across_dim
