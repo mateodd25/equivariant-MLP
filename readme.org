@@ -2,7 +2,7 @@
 
 This repository contains code accompanying the paper "Any-dimensional equivariant neural networks". It includes simple implementations of the computational recipe defined in the paper and scripts to run all the numerical experiments in the paper.
 
-Warning: the instructions assume that your current working directory is the base of this repository.
+*Warning: the instructions assume that your current working directory is the base of this repository.*
 
 * One-time setup
 For the following instructions you will need Python 3.9, and pip installed.Consider creating a virtual enviroment for this project. For example, by running:
@@ -22,9 +22,12 @@ All the scripts to run the numerical examples are in the =experiments= folders. 
 | =free_trace.py=                |
 | =free_diagonal_extraction.py=  |
 | =free_symmetric_projection.py= |
-| =free_singular_vector.py=    |
-| =free_O_invariant.py=        |
+| =free_singular_vector.py=      |
+| =free_O_invariant.py=          |
+
  The results will be saved to a new folder within the =results= directory.
+
+ *Warning: running any of this experiments might take a while.*
 
 * Generating figures
 
