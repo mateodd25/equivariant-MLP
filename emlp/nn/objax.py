@@ -4,7 +4,12 @@ import objax.nn as nn
 import objax.functional as F
 import numpy as np
 from emlp.reps import T, Rep, Scalar
-from emlp.reps import EquivariantOperatorSequence, EquivariantOperators
+from emlp.reps import (
+    EquivariantOperatorSequence,
+    EquivariantOperators,
+    GatedSequence,
+    bilinear_aux,
+)
 from emlp.reps import bilinear_weights
 from emlp.reps.product_sum_reps import SumRep
 import collections
@@ -103,8 +108,11 @@ class GatedNonlinearity(Module):
         self.rep = rep
 
     def __call__(self, values):
-        gate_scalars = values[..., gate_indices(self.rep)]
-        activations = jax.nn.relu(gate_scalars) * values[..., : self.rep.size()]
+        indices = gate_indices(self.rep)
+        # import pdb
+        # pdb.set_trace()
+        gate_scalars = values[..., indices]
+        activations = jax.nn.sigmoid(gate_scalars) * values[..., : self.rep.size()]
         return activations
 
 
@@ -119,8 +127,9 @@ class ReluNonlinearity(Module):
         self.rep = rep
 
     def __call__(self, values):
-        activations = jax.nn.relu(values)
-        return activations
+        # activations = jax.nn.relu(values)
+        # return activations
+        return values
 
 
 @export
@@ -251,21 +260,21 @@ class ExtendableLinear(nn.Linear):
                 self.b = TrainVar(
                     objax.random.uniform((self.bias_size,)) / jnp.sqrt(1e2)
                 )
-                print("Use bias")
+                logging.debug("Use bias")
             else:
-                print("No bias")
+                logging.debug("No bias")
                 self.bias_basis = None
-            # TODO: Fix this hack once EquivariantLinearMaps is implemented properly. (Receive basis as oppposed to compatibility conditions)
+            # TODO: Consider switching an implementation where we receive basis as oppposed to compatibility conditions.
             if compatibility_constraints is not None:
                 self.rep_W = rep_W = EquivariantOperators(
                     repin, repout, compatibility_constraints
-                )  # TODO: Make class to handle this?
+                )
                 self.basis = rep_W.equivariant_basis()
-                print("Compatible")
+                logging.debug("Compatible")
             else:
                 self.rep_W = rep_W = repin >> repout
                 self.basis = rep_W.equivariant_basis()
-                print("Not compatatible")
+                logging.debug("No compatible")
             basis_size = self.basis.shape[1]
             self.w = TrainVar(objax.random.uniform((basis_size,)) / jnp.sqrt(1e2))
 
@@ -315,7 +324,7 @@ class ExtendableBilinear(Module):
         learned_parameters=None,
     ):
         super().__init__()
-        self.linear_one = ExtendableLinear(
+        self.linear = ExtendableLinear(
             rep_in,
             rep_out,
             include_bias=use_bias,
@@ -324,18 +333,20 @@ class ExtendableBilinear(Module):
                 learned_parameters[0] if learned_parameters is not None else None
             ),
         )
-        self.linear_two = ExtendableLinear(
-            rep_in,
-            rep_out,
-            include_bias=use_bias,
-            compatibility_constraints=compatibility_constraints,
-            learned_parameters=(
-                learned_parameters[1] if learned_parameters is not None else None
-            ),
+        param_dim, aux_map = bilinear_aux(rep_out, rep_out)
+        self.aux_mapping = jit(aux_map)
+        self.w = TrainVar(
+            (
+                objax.random.normal((param_dim,))
+                if learned_parameters is None
+                else learned_parameters[1]
+            )
         )
 
     def __call__(self, x):
-        return self.linear_one(x) * self.linear_two(x)
+        lin = self.linear(x)
+        W = self.aux_mapping(self.w.value, lin)
+        return (W @ lin[..., None])[..., 0]
 
 
 @export
@@ -347,35 +358,43 @@ class ExtendableEMLPBlock(Module):
         compatibility_constraints=None,
         use_bias=True,
         use_bilinear=True,
+        use_gates=True,
         learned_parameters=None,
     ):
         super().__init__()
+        logging.info(
+            f"{'Compatible block' if compatibility_constraints is not None else 'Free block'} ({rep_in.size()}, {rep_out.size()})"
+        )
         self.use_bilinear = use_bilinear
+        self.use_gates = use_gates
         learned_linear_parameters = None
         learned_bilinear_parameters = None
+        final_out = gated(rep_out) if use_gates else rep_out
         if learned_parameters is not None:
             learned_linear_parameters = learned_parameters["linear"]
             if use_bilinear:
                 learned_bilinear_parameters = learned_parameters["bilinear"]
-
+        # import pdb; pdb.set_trace()
         self.linear = ExtendableLinear(
             rep_in,
-            rep_out,
+            final_out,
             include_bias=use_bias,
             compatibility_constraints=compatibility_constraints,
             learned_parameters=learned_linear_parameters,
         )
-        # TODO: Implement Bilinear
         if use_bilinear:
             self.bilinear = ExtendableBilinear(
-	            rep_in,
-	            rep_out,
-	            use_bias=use_bias,
-	            compatibility_constraints=compatibility_constraints,
-	            learned_parameters=learned_bilinear_parameters,
-	        )
-	        # self.nonlinearity = GatedNonlinearity(rep_out)
-        self.nonlinearity = ReluNonlinearity(rep_out)
+                rep_in,
+                final_out,
+                use_bias=use_bias,
+                compatibility_constraints=compatibility_constraints,
+                learned_parameters=learned_bilinear_parameters,
+            )
+        if use_gates:
+            # We pass the original representation, to be able to compute the gated indices.
+            self.nonlinearity = GatedNonlinearity(rep_out)
+        else:
+            self.nonlinearity = ReluNonlinearity(rep_out)
 
     def __call__(self, x):
         res = self.linear(x)
@@ -386,8 +405,7 @@ class ExtendableEMLPBlock(Module):
 
 @export
 class ExtendableEMLP(Module, metaclass=Named):
-    """
-    Given a sequence of architectures. It creates an EMLP at level k.
+    """Given a sequence of architectures. It creates an EMLP at level k.
 
     The argument is_compatible determines whether the EMLP satisfies compatibility conditions.
     If learned_parameters = {(W_i, b_i)} is not null it initializes the layers with these parameters.
@@ -402,6 +420,7 @@ class ExtendableEMLP(Module, metaclass=Named):
         is_compatible=False,
         use_bias=True,
         use_bilinear=True,
+        use_gates=True,
         learned_parameters=None,
     ):
         self.rep_in = sequence_in.representation(k)
@@ -410,9 +429,10 @@ class ExtendableEMLP(Module, metaclass=Named):
         self.is_compatible = is_compatible
         self.level = k
         self.use_bilinear = use_bilinear
+        self.use_gates = use_gates
 
         if learned_parameters is not None:
-            # TODO: Add checks to ensure that he learned parameters make sense for the given sequences
+            # TODO: Add checks to ensure that we learned parameters make sense for the given sequences
             self.use_basis = False
             sequences = [sequence_in] + hidden_sequences
             j = 0
@@ -425,6 +445,7 @@ class ExtendableEMLP(Module, metaclass=Named):
                         compatibility_constraints=None,
                         use_bias=use_bias,
                         use_bilinear=use_bilinear,
+                        use_gates=use_gates,
                         learned_parameters=learned_parameters[j],
                     )
                 )
@@ -439,21 +460,26 @@ class ExtendableEMLP(Module, metaclass=Named):
                 ),
             )
 
-        else:
+        else:  # Parameters are not learned, initialize at random.
             self.use_basis = True
             if is_compatible:
                 sequences = [sequence_in] + hidden_sequences
                 layers = []
                 for sin, sout in zip(sequences, sequences[1:]):
+                    # Change the sequence for the compatibility constraints
+                    # if we are using gates.
+                    gsout = GatedSequence(sout) if use_gates else sout
+                    # import pdb; pdb.set_trace()
                     layers.append(
                         ExtendableEMLPBlock(
                             sin.representation(k),
                             sout.representation(k),
                             compatibility_constraints=EquivariantOperatorSequence(
-                                sin, sout
+                                sin, gsout
                             ).compatibility_constraints(k),
                             use_bias=use_bias,
                             use_bilinear=use_bilinear,
+                            use_gates=use_gates,
                         )
                     )
 
@@ -476,10 +502,16 @@ class ExtendableEMLP(Module, metaclass=Named):
                 logging.info(f"Reps: {reps}")
                 self.network = Sequential(
                     *[
-                        ExtendableEMLPBlock(rin, rout, use_bilinear=use_bilinear)
+                        ExtendableEMLPBlock(
+                            rin,
+                            rout,
+                            use_bias=use_bias,
+                            use_bilinear=use_bilinear,
+                            use_gates=use_gates,
+                        )
                         for rin, rout in zip(reps, reps[1:])
                     ],
-                    ExtendableLinear(reps[-1], self.rep_out),
+                    ExtendableLinear(reps[-1], self.rep_out, include_bias=use_bias),
                 )
 
     def __call__(self, x, training=True):
@@ -495,7 +527,13 @@ class EMLPSequence(object):
     """
 
     def __init__(
-            self, sequence_in, sequence_out, hidden_sequences, is_compatible=False, use_bilinear=True
+        self,
+        sequence_in,
+        sequence_out,
+        hidden_sequences,
+        is_compatible=False,
+        use_bilinear=True,
+        use_gates=True,
     ):
         self.is_trained = False
         self.trained_level = -1  # Level at which the EMLP was trained
@@ -506,25 +544,30 @@ class EMLPSequence(object):
         self.is_compatible = is_compatible
         self.use_bias = not is_compatible
         self.use_bilinear = use_bilinear
+        self.use_gates = use_gates
 
     def _extend_parameters_for_linear_layer(
         self, level, learned_layer, seq_in, seq_out
     ):
         w = learned_layer.get_linear_map().reshape(-1)
         b = learned_layer.get_bias() if self.use_bias else None
-        operator_sequence = EquivariantOperatorSequence(seq_in, seq_out)
+        gseq_out = GatedSequence(seq_out) if self.use_gates else seq_out
+        operator_sequence = EquivariantOperatorSequence(seq_in, gseq_out)
         b_at_new_level = None
+        # import pdb
+
+        # pdb.set_trace()
 
         if self.trained_level > level:
             # When the new level is below the trained level we
-            # simply project through the up_embedding
+            # simply project through the embedding
             print("Projecting down.")
             down_embedding = operator_sequence.composite_embedding(
                 self.trained_level, level
             ).H
             w_at_new_level = down_embedding @ w
             if self.use_bias:
-                down_embedding_b = seq_out.composite_embedding(
+                down_embedding_b = gseq_out.composite_embedding(
                     self.trained_level, level
                 ).H
                 b_at_new_level = down_embedding_b @ b
@@ -536,16 +579,15 @@ class EMLPSequence(object):
                 level, self.trained_level
             )
             right_hand_side = np.zeros(constraints.shape[0])
-            # TODO: Make sure that the sizes here are right
+            # TODO: Add checks to make sure that the sizes here are right
             right_hand_side[(-len(w)) :] = w
-            # w_at_new_level, _, _, _ = np.linalg.solve(constraints.to_dense(), right_hand_side.reshape((len(right_hand_side), 1)))
-            map = lambda x: constraints @ x
+            mapping = lambda x: constraints @ x
             w_at_new_level = linear_solve.solve_normal_cg(
-                map, right_hand_side, init=np.ones(constraints.shape[1])
+                mapping, right_hand_side, init=np.ones(constraints.shape[1])
             )
 
             if self.use_bias:
-                constraints_b = seq_out.extendability_constraints(
+                constraints_b = gseq_out.extendability_constraints(
                     level, self.trained_level
                 )
                 right_hand_side_b = np.zeros(constraints_b.shape[0])
@@ -557,7 +599,7 @@ class EMLPSequence(object):
                     init=np.ones(constraints_b.shape[1]),
                 )
         return (
-            w_at_new_level.reshape(seq_out.dimension(level), seq_in.dimension(level)),
+            w_at_new_level.reshape(gseq_out.dimension(level), seq_in.dimension(level)),
             b_at_new_level,
         )
 
@@ -565,16 +607,14 @@ class EMLPSequence(object):
         self, level, learned_layer, seq_in, seq_out
     ):
         w_1, b_1 = self._extend_parameters_for_linear_layer(
-            level, learned_layer.linear_one, seq_in, seq_out
+            level, learned_layer.linear, seq_in, seq_out
         )
-        w_2, b_2 = self._extend_parameters_for_linear_layer(
-            level, learned_layer.linear_two, seq_in, seq_out
-        )
-        return (w_1, b_1), (w_2, b_2)
+        w = learned_layer.w.value
+        return (w_1, b_1), w
 
     def _extend_parameters_for_layer(self, level, learned_layer, seq_in, seq_out):
         """
-        Extends the parameters of an ExtendableEMLPBlock or an ExtendableLinear layer. 
+        Extends the parameters of an ExtendableEMLPBlock or an ExtendableLinear layer.
         """
         bilinear_layer = None
         if isinstance(learned_layer, ExtendableEMLPBlock):
@@ -599,7 +639,8 @@ class EMLPSequence(object):
 
         return parameters
 
-    # TODO: Store a cached version of already evaluated levels, so as to not repeat computations.
+    # TODO: Store a cached version of already evaluated levels, so as to not
+    # repeat computations.
     def emlp_at_level(self, level, trained=False):
         if self.is_trained is False and trained is True:
             raise ValueError(
@@ -607,6 +648,7 @@ class EMLPSequence(object):
             )
 
         # Extend when the EMLPSequence is already trained
+        learned_parameters = None
         if self.is_trained:
             if self.trained_level == level:
                 return self.trained_emlp
@@ -621,26 +663,18 @@ class EMLPSequence(object):
                     self._extend_parameters_for_layer(level, layer, seq_in, seq_out)
                 )
 
-            return ExtendableEMLP(
-                self.sequence_in,
-                self.sequence_out,
-                self.hidden_sequences,
-                level,
-                self.is_compatible,
-                self.use_bias,
-                self.use_bilinear,
-                learned_parameters=learned_parameters,
-            )
-
-        # If the sequence is not trained, return a randomly initialized EMLP.
+        # When the learned parameters are None, return a randomly initilized
+        # EMLP.
         return ExtendableEMLP(
             self.sequence_in,
             self.sequence_out,
             self.hidden_sequences,
-            level,  # Level
+            level,
             is_compatible=self.is_compatible,
-            use_bias=(not self.is_compatible),
+            use_bias=self.use_bias,
             use_bilinear=self.use_bilinear,
+            use_gates=self.use_gates,
+            learned_parameters=learned_parameters,
         )
 
     def set_trained_emlp_at_level(self, emlp: ExtendableEMLP):
@@ -697,6 +731,9 @@ class EMLP(Module, metaclass=Named):
         )
 
     def __call__(self, x, training=True):
+        return self.network(x)
+
+    def predict(self, x):
         return self.network(x)
 
 
@@ -866,7 +903,6 @@ def gate_indices(ch_rep: Rep) -> jnp.ndarray:
     channels = ch_rep.size()
     perm = ch_rep.perm
     indices = np.arange(channels)
-
     if not isinstance(ch_rep, SumRep):  # If just a single rep, only one scalar at end
         return (
             indices if ch_rep.is_permutation else np.ones(ch_rep.size()) * ch_rep.size()

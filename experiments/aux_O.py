@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
+#!/usr/bin/env python3
 
+import logging
 import objax
 import jax.numpy as jnp
 import numpy as np
@@ -9,6 +11,7 @@ from time import time
 import gc
 import pickle
 from emlp.reps import (
+    OrthogonalSequence,
     PermutationSequence,
     TrivialSequence,
     EquivariantOperatorSequence,
@@ -22,25 +25,56 @@ from emlp.groups import S
 from objax.functional.loss import mean_squared_error
 import matplotlib.pyplot as plt
 import scienceplots
+from functools import partial
+from itertools import islice
+from jax import vmap
+from math import sin
+
+
+def scale_adjusted_rel_err(a, b, g):
+    return jnp.sqrt(((a - b) ** 2).mean()) / (
+        jnp.sqrt((a**2).mean())
+        + jnp.sqrt((b**2).mean())
+        + jnp.abs(g - jnp.eye(g.shape[-1])).mean()
+    )
+
+
+def equivariance_err(model, x, y, group=None):
+    try:
+        model = model.model
+    except:
+        pass
+    group = model.G if group is None else group
+    gs = group.samples(x.shape[0])
+    rho_gin = vmap(model.rep_in.rho_dense)(gs)
+    rho_gout = vmap(model.rep_out.rho_dense)(gs)
+    y1 = model((rho_gin @ x[..., None])[..., 0])
+    y2 = (rho_gout @ model(x)[..., None])[..., 0]
+    return np.asarray(scale_adjusted_rel_err(y1, y2, gs))
 
 
 def random_sample(size):
-    return  np.random.randn(size, size)
+    return np.random.randn(2 * size)
 
 
 def to_evaluate(x):
-    # y = sum(x)
-    # y = np.sum(np.sqrt(np.abs(x)))
-    # y = np.sum(np.abs(x))
-    # y = (np.trace(np.matrix(np.abs(x))))
-    # y = (np.sum(np.sqrt(np.diag(np.matrix(np.abs(x))))))
-    return np.trace(np.matrix(x))
+    d = int(len(x) / 2)
+    x1 = x[:d]
+    x2 = x[d:]
+    y = (
+        sin(np.linalg.norm(x1))
+        - np.linalg.norm(x2) ** 3 / 2
+        + np.dot(x1, x2) / (np.linalg.norm(x1) * np.linalg.norm(x2))
+    )
+    # y = np.linalg.norm(x)
+    return y
 
 
 def test_different_dimensions(NN, dimensions_to_extend, test_data):
     # models = []
     times = []
     mses = []
+    equi_error = []
     j = 0
     for i in dimensions_to_extend:
         ext_test_data = test_data[j]
@@ -49,31 +83,46 @@ def test_different_dimensions(NN, dimensions_to_extend, test_data):
         model = NN.emlp_at_level(i, trained=True)
         times.append(time() - t1)
         mses.append(
-            np.mean([(model(x.reshape(-1)) - y) ** 2 for x, y in ext_test_data])
+            np.mean(
+                [
+                    (model(x.reshape(-1)).reshape(y.shape) - y) ** 2
+                    for x, y in ext_test_data
+                ]
+            )
         )
-        print(f"Level {i} time to extend {times[-1]} with MSE {mses[-1]}")
+        equi_error.append(
+            np.mean(
+                [equivariance_err(model, x.reshape(-1), y) for x, y in ext_test_data]
+            )
+        )
+        print(
+            f"Level {i} time to extend {times[-1]} with MSE {mses[-1]} with Equi error {equi_error[-1]}"
+        )
         del model
         gc.collect()
     return times, mses
 
 
 if __name__ == "__main__":
+    logging.getLogger().setLevel(logging.INFO)
     np.random.seed(926)
     BS = 500
-    lr = 1e-2
-    NUM_EPOCHS = 1000
+    lr = 6e-3
+    NUM_EPOCHS = 500
+    # NUM_EPOCHS = 0
 
-    SS = PermutationSequence()
-    TT = TrivialSequence(SS.group_sequence())
-    V2 = SS * SS
-    # inner = V2 + V2 + V2 + SS + SS + SS
-    inner = V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS
-    # inner = (
-    # V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS
-    # )  # Two inner layers of this are good for l1 trace
-    # inner = V2 + V2 + V2 + V2 + V2 + SS + SS + SS + SS + SS + SS + SS
+    T1 = OrthogonalSequence()
+    # T1 = PermutationSequence()
+    T0 = TrivialSequence(T1.group_sequence())
+    T2 = T1 * T1
+    seq_in = T1 + T1
+    # inner = 20 * T0 + 15 * T1 + 8 * T2 + 4 * (T2 * T1)
+    inner = 31 * T0 + 10 * T1 + 5 * T2 + 2 * (T2 * T1)
+    seq_out = T0
 
-    dimensions_to_extend = range(2, 11)
+    dimensions_to_extend = range(2, 7)
+    d = 3
+    # dimensions_to_extend = range(d, d + 1)
     interdimensional_test = []
     for i in dimensions_to_extend:
         ext_test_data = []
@@ -82,27 +131,28 @@ if __name__ == "__main__":
             ext_test_data.append((x, to_evaluate(x)))
         interdimensional_test.append(ext_test_data)
 
-    d = 6
     train_dataset = []
     test_dataset = []
-    N = 2000
+    N = 3000
     for j in range(N):
         x = random_sample(d)
         y = to_evaluate(x)
-        train_dataset.append((x.reshape((d**2,)), y))
+        train_dataset.append((x, y))
 
     for j in range(N):
         x = random_sample(d)
         y = to_evaluate(x)
-        test_dataset.append((x.reshape((d**2,)), y))
+        test_dataset.append((x, y))
 
     def train_model(compatible):
         NN = EMLPSequence(
-            V2, TT, 2 * [inner], is_compatible=compatible, use_bilinear=False
+            seq_in, seq_out, 2 * [inner], is_compatible=compatible, use_gates=True
         )  # Rep in  # Rep out  # Hidden layers
         model = NN.emlp_at_level(d)
 
         opt = objax.optimizer.Adam(model.vars())
+
+        print(f"Number of variables: {sum([v.shape[0] for v in model.vars()])}")
 
         @objax.Jit
         @objax.Function.with_vars(model.vars())
@@ -121,7 +171,6 @@ if __name__ == "__main__":
 
         trainloader = DataLoader(train_dataset, batch_size=BS, shuffle=True)
         testloader = DataLoader(test_dataset, batch_size=BS, shuffle=True)
-        print("Generated the data")
 
         test_losses = []
         train_losses = []
@@ -130,6 +179,9 @@ if __name__ == "__main__":
         for epoch in tqdm(range(NUM_EPOCHS)):
             losses = []
             gradient_norms = []
+            # import pdb
+
+            # pdb.set_trace()
             for x, y in trainloader:
                 v, g = train_op(jnp.array(x), jnp.array(y), lr)
                 losses.append(v)
@@ -142,7 +194,7 @@ if __name__ == "__main__":
                     np.mean([loss(jnp.array(x), jnp.array(y)) for (x, y) in testloader])
                 )
                 print(
-                    f"Epoch {epoch} Train loss {train_losses[-1]} Test loss {test_losses[-1]} Grad norm {gra_n[-1]}"
+                    f"Epoch {epoch} Train loss {train_losses[-1]} Test loss {test_losses[-1]} Equi error {equivariance_err(model, jnp.array(x), jnp.array(y))}"
                 )
 
         NN.set_trained_emlp_at_level(model)
@@ -158,15 +210,15 @@ if __name__ == "__main__":
         NN_free, dimensions_to_extend, interdimensional_test
     )
 
-    plt.style.context(["science", "vibrant"])
-    fig, ax = plt.subplots()
-    ax.plot(dimensions_to_extend, mses_free, label="Free NN", linestyle="dashed")
-    ax.plot(dimensions_to_extend, mses_comp, label="Compatible NN")
-    plt.yscale("log")
-    ppar = dict(xlabel=r"Dimension $d$", ylabel=r"Mean squared error")
-    ax.legend()
-    ax.set(**ppar)
-    plt.savefig("Interdimensional.pdf")
+    with plt.style.context(["science", "vibrant"]):
+        fig, ax = plt.subplots()
+        ax.plot(dimensions_to_extend, mses_free, label="Free NN", linestyle="dashed")
+        ax.plot(dimensions_to_extend, mses_comp, label="Compatible NN")
+        plt.yscale("log")
+        ppar = dict(xlabel=r"Dimension $d$", ylabel=r"Mean squared error")
+        ax.legend()
+        ax.set(**ppar)
+        plt.savefig("O_invariant.pdf")
 
     state = dict(
         times_comp=times_comp,
@@ -174,41 +226,4 @@ if __name__ == "__main__":
         mses_comp=mses_comp,
         mses_free=mses_free,
     )
-    pickle.dump(state, open("state.p", "wb"))
-
-    # import matplotlib.pyplot as plt
-
-    # plt.plot(np.arange(NUM_EPOCHS), train_losses_comp, label="Train loss")
-    # plt.plot(np.arange(0, NUM_EPOCHS, 10), test_losses_comp, label="Test loss")
-    # plt.legend()
-    # plt.yscale("log")
-    # plt.savefig("result.pdf")
-
-    # )
-
-    # model2 = models[0]
-    # model6 = models[4]
-
-    # small_e = np.eye(2)
-    # e = np.eye(5); e[2, 2] = 0; e[3, 3] = 0; e[4, 4] = 0
-
-    # print(f"Error small identity {np.abs(model(e.reshape(-1)) - model2(small_e.reshape(-1)))}")
-
-    # e = np.eye(5)
-    # big_e = np.eye(6)
-    # big_e[5, 5] = 0
-    # print(f"Error big identity {np.abs(model(e.reshape(-1)) - model6(big_e.reshape(-1)))}")
-
-    # small_e = np.outer( np.ones(2), np.ones(2))
-    # v = np.zeros(5)
-    # v[:2] = np.ones(2)
-    # e = np.outer(v,v)
-    # print(f"Error small ones {np.abs(model(e.reshape(-1)) - model2(small_e.reshape(-1)))}")
-
-    # e = np.outer(np.ones(5), np.ones(5))
-    # v = np.ones(6)
-    # v[-1] = 0
-    # big_e = np.outer(v,v)
-    # print(f"Error big ones {np.abs(model(e.reshape(-1)) - model6(big_e.reshape(-1)))}")
-
-    # maps = EquivariantOperatorSequence(V2, inner)
+    pickle.dump(state, open("O_invariant_state.p", "wb"))

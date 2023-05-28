@@ -30,6 +30,8 @@ setup(
         "tqdm>=4.38",
         "matplotlib",
         "scikit-learn",
+        "jaxopt",
+        "scienceplots",
     ],
     extras_require={"EXPTS": ["olive-oil-ml"]},
     packages=find_packages(),

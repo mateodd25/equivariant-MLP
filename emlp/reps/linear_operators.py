@@ -10,7 +10,6 @@ from scipy.sparse import csr_matrix, vstack, kron
 product = lambda c: reduce(lambda a, b: a * b, c)
 
 
-# TODO: Remove this export decorator eventually.
 @export
 def lazify(x):
     if isinstance(x, LinearOperator):
@@ -52,9 +51,10 @@ class LazyKron(LinearOperator):
     def __init__(self, Ms):
         self.Ms = Ms
         shape = product([Mi.shape[0] for Mi in Ms]), product([Mi.shape[1] for Mi in Ms])
-        # self.dtype=Ms[0].dtype
         super().__init__(None, shape)
-        self.is_sparse = np.array([M.is_sparse for M in Ms]).all()
+        # TODO Use sparsity do accelarate the linear system solvers
+        # self.is_sparse = np.array([M.is_sparse for M in Ms]).all()
+        self.is_sparse = False
 
     def _matvec(self, v):
         return self._matmat(v).reshape(-1)
@@ -92,7 +92,6 @@ class LazyKron(LinearOperator):
         return reduce(kron, sparse_Ms)
 
 
-# @jit
 def kronsum(A, B):
     return jnp.kron(A, jnp.eye(B.shape[-1])) + jnp.kron(jnp.eye(A.shape[-1]), B)
 
@@ -130,14 +129,6 @@ class LazyKronsum(LinearOperator):
         if len(Ms) == 1:
             return Ms[0]
         return super().__new__(cls)
-
-
-## could also be implemented as follows, but the fusing the sum into a single linearOperator is faster
-# def lazy_kronsum(Ms):
-#     n = len(Ms)
-#     lprod = np.cumprod([1]+[mi.shape[-1] for mi in Ms])
-#     rprod = np.cumprod([1]+[mi.shape[-1] for mi in reversed(Ms)])[::-1]
-#     return reduce(lambda a,b: a+b,[lazy_kron([I(lprod[i]),Mi,I(rprod[i+1])]) for i,Mi in enumerate(Ms)])
 
 
 class LazyJVP(LinearOperator):
@@ -214,8 +205,6 @@ class LazyDirectSum(LinearOperator):
             sum(Mi.shape[1] * c for Mi, c in zip(Ms, self.multiplicities)),
         )
         super().__init__(None, shape)
-        # self.dtype=Ms[0].dtype
-        # self.dtype=jnp.dtype('float32')
 
     def _matvec(self, v):
         return lazy_direct_matmat(v, self.Ms, self.multiplicities)
@@ -224,7 +213,7 @@ class LazyDirectSum(LinearOperator):
         return lazy_direct_matmat(v, self.Ms, self.multiplicities)
 
     def _adjoint(self):
-        return LazyDirectSum([Mi.T for Mi in self.Ms])
+        return LazyDirectSum([Mi.T for Mi in self.Ms], self.multiplicities)
 
     def invT(self):
         return LazyDirectSum([M.invT() for M in self.Ms])
@@ -235,10 +224,6 @@ class LazyDirectSum(LinearOperator):
             Mi.to_dense() if isinstance(Mi, LinearOperator) else Mi for Mi in Ms_all
         ]
         return jax.scipy.linalg.block_diag(*Ms_all)
-
-    # def __new__(cls,Ms,multiplicities=None):
-    #     if len(Ms)==1 and multiplicities is None: return Ms[0]
-    #     return super().__new__(cls)
 
 
 def lazy_direct_matmat(v, Ms, mults):

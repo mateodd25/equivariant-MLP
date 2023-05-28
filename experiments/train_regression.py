@@ -12,7 +12,7 @@ import emlp.reps
 import emlp.groups
 import objax
 import emlp.datasets
-from emlp.datasets import Inertia, O5Synthetic, ParticleInteraction
+from emlp.datasets import Inertia, O5Synthetic, ParticleInteraction, TraceData
 
 log_levels = {
     "critical": logging.CRITICAL,
@@ -79,4 +79,7 @@ if __name__ == "__main__":
         makeTrainer.__kwdefaults__, namespace=(emlp.groups, emlp.datasets, emlp.nn)
     )
     trainer = makeTrainer(**cfg)
+    # import pdb
+
+    # pdb.set_trace()
     trainer.train(cfg["num_epochs"])
