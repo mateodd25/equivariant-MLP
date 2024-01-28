@@ -5,7 +5,7 @@ This repository contains code accompanying the paper "Any-dimensional equivarian
 *Warning: the instructions assume that your current working directory is the base of this repository.*
 
 * One-time setup
-For the following instructions you will need Python 3.9, and pip installed. Consider creating a virtual enviroment for this project. For example, by running:
+For the following instructions, you will need Python 3.9 and pip installed. Consider creating a virtual environment for this project. For example, by running:
 #+begin_src shell
 $ python -m venv .venv
 $ source .venv/bin/activate
